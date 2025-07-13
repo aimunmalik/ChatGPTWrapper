@@ -1,20 +1,37 @@
 import streamlit as st
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
+# load_dotenv()
 from openai import OpenAI
 import io
-
 import PyPDF2
 import docx
-
-# Load the OpenAI API key
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # Streamlit UI
-st.set_page_config(page_title="ChatGPT App", page_icon="💬")
-st.title("💬 Chat with ChatGPT")
+st.set_page_config(page_title="ANNA AI", page_icon="💬")
+st.title("💬 Chat with ANNA AI")
 
+# Display your logo in sidebar
+import base64
+import io
+from PIL import Image
+
+def get_base64_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode()
+
+logo_base64 = get_base64_image("anna_logo.png")
+
+with st.sidebar:
+    st.markdown(
+        f"""
+        <div style='text-align: center; padding-bottom: 10px;'>
+            <img src='data:image/png;base64,{logo_base64}' width='120'>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 # Sidebar: Model selection and Clear Chat button
 with st.sidebar:
     st.header("Settings")
@@ -147,3 +164,5 @@ if submitted and (user_input or uploaded_files):
     reply = response.choices[0].message.content
     st.session_state.messages.append({"role": "assistant", "content": reply})
     st.rerun()
+
+## Run with streamlit run app.py
