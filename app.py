@@ -6,7 +6,8 @@ from openai import OpenAI
 import io
 import PyPDF2
 import docx
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
 
 # Streamlit UI
 st.set_page_config(page_title="ANNA AI", page_icon="💬")
