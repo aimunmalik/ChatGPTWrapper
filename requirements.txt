@@ -1,6 +1,26 @@
-streamlit
+# Core Streamlit and OpenAI
+streamlit>=1.28.0
 openai>=1.0.0
-python-dotenv
-PyPDF2
-python-docx
-Pillow
+
+# PDF Processing Libraries
+PyPDF2>=3.0.0
+pdfplumber>=0.9.0
+PyMuPDF>=1.23.0
+
+# Document Processing
+python-docx>=0.8.11
+
+# Google Cloud Vision API
+google-cloud-vision>=3.4.0
+google-auth>=2.17.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
+
+# Image Processing
+Pillow>=9.5.0
+
+# JSON handling (usually included with Python)
+# json - built-in module
+
+# Input/Output operations (usually included with Python) 
+# io - built-in module
