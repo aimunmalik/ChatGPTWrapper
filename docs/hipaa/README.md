@@ -22,7 +22,7 @@ Statuses: **Draft** → **Approved** (by ANNA compliance lead) → **Signed** (w
 
 ## Where signed copies live
 
-These markdown files are the *working drafts*. Once approved and signed, the countersigned PDFs are filed in **ANNA's compliance record system** (`[ANNA COMPLIANCE RECORD SYSTEM]`) — not in Git. Git holds the templates and their version history; the compliance record system holds the legally operative documents.
+These markdown files are the *working drafts*. Once approved and signed, the countersigned PDFs are filed in **ANNA's compliance record system** (`ANNA Google Drive → Compliance → HIPAA (restricted folder)`) — not in Git. Git holds the templates and their version history; the compliance record system holds the legally operative documents.
 
 ## Review cadence
 
@@ -34,8 +34,8 @@ These markdown files are the *working drafts*. Once approved and signed, the cou
 
 | Role | Name | Effective |
 |---|---|---|
-| HIPAA Security Officer | `[NAME]`, `[TITLE]` | `[DATE]` |
-| HIPAA Privacy Officer | `[NAME]`, `[TITLE]` | `[DATE]` |
+| HIPAA Security Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | `[DATE]` |
+| HIPAA Privacy Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | `[DATE]` |
 
 Both officers must be named on record with ANNA HR before any Praxis production deploy.
 

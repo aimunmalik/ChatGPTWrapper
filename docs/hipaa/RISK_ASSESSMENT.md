@@ -63,7 +63,7 @@ Praxis is a Claude-based clinical assistant for ANNA workforce members. Architec
 | # | Threat | Vulnerability | Existing controls | Likelihood | Impact | Residual |
 |---|---|---|---|---|---|---|
 | T1 | Insider misuse — workforce member accesses or exports PHI without clinical need | Over-broad role, curiosity, malicious intent | Cognito unique user IDs; role groups (`admins`, `users`); CloudTrail records every API call; DynamoDB read metrics; quarterly access review; sanctions policy; workforce training | Medium | High | **Medium** |
-| T2 | Account compromise — stolen credentials, phishing | User reuses password, token theft via malware, lost laptop with cached tokens | TOTP MFA required; 1-hour access tokens; Cognito risk-based auth; GuardDuty anomalous-login detection; MDM on endpoints (`[ANNA CONTACT]`); incident response runbook | Medium | High | **Medium** |
+| T2 | Account compromise — stolen credentials, phishing | User reuses password, token theft via malware, lost laptop with cached tokens | TOTP MFA required; 1-hour access tokens; Cognito risk-based auth; GuardDuty anomalous-login detection; MDM on endpoints (`aimun@annaautismcare.com`); incident response runbook | Medium | High | **Medium** |
 | T3 | Attachment malware (Phase 6+) — malicious file uploaded as clinical attachment | Uploaded file processed or forwarded to another user | Attachments scoped to issuer (presigned GET/PUT with user-bound keys); no in-browser execution of uploaded content; S3 Object Lock; future malware scan step (planned; see action items) | Low | Medium | **Low** |
 | T4 | Data exfiltration via logs — a developer accidentally writes PHI into CloudWatch | `logger.info(f"user said: {msg}")` instead of structured metadata | Structured-logging policy; unit test `test_no_phi_in_logs.py` asserts redaction; code review; Bedrock invocation logging OFF; X-Ray body redaction required | Medium | High | **Medium** |
 | T5 | Misconfigured S3 — public bucket, overly broad ACL | Drift from IaC, console changes, missing Block Public Access | AWS Config HIPAA conformance pack flags drift; Access Analyzer; S3 Block Public Access at account level; CMK-required bucket policies; CloudTrail S3 data events on PHI buckets | Low | High | **Low** |
@@ -94,9 +94,9 @@ No residual High risks remain, assuming every listed control is actually impleme
 
 | # | Action | Owner | Target date |
 |---|---|---|---|
-| A1 | Name HIPAA Security Officer and Privacy Officer on record with ANNA HR | `[ANNA CONTACT]` | `[DATE]` |
-| A2 | Sign AWS BAA in AWS Artifact and file copy in compliance record system | `[ANNA CONTACT]` | Before prod deploy |
-| A3 | Deliver workforce training per [WORKFORCE_TRAINING.md](POLICIES/WORKFORCE_TRAINING.md) to every Praxis user | `[ANNA CONTACT]` | Before access granted |
+| A1 | Name HIPAA Security Officer and Privacy Officer on record with ANNA HR | `aimun@annaautismcare.com` | `[DATE]` |
+| A2 | Sign AWS BAA in AWS Artifact and file copy in compliance record system | `aimun@annaautismcare.com` | Before prod deploy |
+| A3 | Deliver workforce training per [WORKFORCE_TRAINING.md](POLICIES/WORKFORCE_TRAINING.md) to every Praxis user | `aimun@annaautismcare.com` | Before access granted |
 | A4 | Implement `test_no_phi_in_logs.py` unit test in Phase 2 backend | Engineering | Phase 2 close |
 | A5 | Define attachment malware-scan step for Phase 6+ (Lambda + ClamAV or third-party) | Engineering | Phase 6 design |
 | A6 | Establish quarterly access review process and calendar invite | HIPAA Security Officer | `[DATE]` |
@@ -113,7 +113,7 @@ No residual High risks remain, assuming every listed control is actually impleme
 
 | Role | Name | Signature | Date |
 |---|---|---|---|
-| HIPAA Security Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
-| HIPAA Privacy Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
+| HIPAA Security Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
+| HIPAA Privacy Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
 
 Next scheduled review: `[DATE + 1 year]`.

@@ -45,7 +45,7 @@ Total delivery: ~45 minutes for initial, ~20 minutes for annual refresh. Format 
 ### 3.4 Reporting incidents (5 min)
 
 - Every suspected security incident must be reported **immediately** per [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) Section 6.
-- Report via `[ANNA CONTACT METHOD]`.
+- Report via `aimun@annaautismcare.com`.
 - Non-retaliation guarantee for good-faith reports.
 
 ### 3.5 Praxis-specific guidance (15 min)
@@ -70,8 +70,8 @@ By signing below, I acknowledge that I have completed ANNA Health's HIPAA workfo
 
 | Field | |
 |---|---|
-| Name | `[NAME]` |
-| Title | `[TITLE]` |
+| Name | `Aimun Malik` |
+| Title | `Founder / HIPAA Security & Privacy Officer` |
 | Date of training | `[DATE]` |
 | Signature | ____________________ |
 | Next refresh due | `[DATE + 1 year]` |
@@ -89,7 +89,7 @@ Signed forms are filed in the compliance record system. Loss of the signed ackno
 
 | Role | Name | Signature | Date |
 |---|---|---|---|
-| HIPAA Security Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
-| HIPAA Privacy Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
+| HIPAA Security Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
+| HIPAA Privacy Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
 
 Effective date: `[DATE]`. Next review: `[DATE + 1 year]`.

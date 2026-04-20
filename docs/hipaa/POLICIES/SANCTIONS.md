@@ -98,8 +98,8 @@ Sanctions records are retained for **6 years** from the date of action, per §16
 
 | Role | Name | Signature | Date |
 |---|---|---|---|
-| HIPAA Privacy Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
-| HIPAA Security Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
-| HR representative | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
+| HIPAA Privacy Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
+| HIPAA Security Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
+| HR representative | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
 
 Effective date: `[DATE]`. Next review: `[DATE + 1 year]`.

@@ -17,7 +17,7 @@ Vendors who **only** touch ANNA's non-PHI systems do not need a BAA, but they ar
 
 | # | Vendor | Service / Role | PHI access? | BAA required? | BAA signed? | Date signed | Document location |
 |---|---|---|---|---|---|---|---|
-| 1 | **AWS (Amazon Web Services)** | All HIPAA-eligible services backing Praxis: Bedrock, Lambda, DynamoDB, Cognito, CloudFront, WAF, S3, KMS, CloudTrail, CloudWatch, Config, GuardDuty, Security Hub, VPC, Secrets Manager, IAM Identity Center, API Gateway, Route 53, ACM | **Yes** (at rest and in transit) | **Yes** | `[Y/N]` | `[DATE]` | AWS Artifact → Agreements → AWS BAA; copy filed in `[ANNA COMPLIANCE RECORD SYSTEM]` |
+| 1 | **AWS (Amazon Web Services)** | All HIPAA-eligible services backing Praxis: Bedrock, Lambda, DynamoDB, Cognito, CloudFront, WAF, S3, KMS, CloudTrail, CloudWatch, Config, GuardDuty, Security Hub, VPC, Secrets Manager, IAM Identity Center, API Gateway, Route 53, ACM | **Yes** (at rest and in transit) | **Yes** | `[Y/N]` | `[DATE]` | AWS Artifact → Agreements → AWS BAA; copy filed in `ANNA Google Drive → Compliance → HIPAA (restricted folder)` |
 | 2 | Anthropic (direct API) | — | No | **No** | n/a | n/a | **Not required.** Claude is accessed via Amazon Bedrock, which is covered by the AWS BAA. ANNA does not use the Anthropic direct API with PHI. |
 | 3 | `[EMAIL PROVIDER]` (e.g. Google Workspace, Microsoft 365) | ANNA workforce email | Possibly (if clinical email is sent) | Yes | `[Y/N]` | `[DATE]` | `[LOCATION]` |
 | 4 | `[EMR VENDOR]` (if and when Praxis integrates with it) | Electronic medical record | **Yes** | Yes | `[Y/N]` | `[DATE]` | `[LOCATION]` |
@@ -67,7 +67,7 @@ If any PHI cannot be returned or destroyed, the BA must extend the BAA's protect
 
 | Role | Name | Signature | Date |
 |---|---|---|---|
-| HIPAA Privacy Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
-| HIPAA Security Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
+| HIPAA Privacy Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
+| HIPAA Security Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
 
 Effective date: `[DATE]`. Next review: `[DATE + 3 months]` (quarterly).

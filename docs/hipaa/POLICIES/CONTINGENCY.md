@@ -130,8 +130,8 @@ Required under §164.308(a)(7)(ii)(D).
 
 | Role | Name | Signature | Date |
 |---|---|---|---|
-| HIPAA Security Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
-| HIPAA Privacy Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
-| Engineering lead | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
+| HIPAA Security Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
+| HIPAA Privacy Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
+| Engineering lead | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
 
 Effective date: `[DATE]`. Next review: `[DATE + 1 year]`.

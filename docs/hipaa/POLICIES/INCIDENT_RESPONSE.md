@@ -89,7 +89,7 @@ In addition to HIPAA, ANNA is subject to state breach notification laws in every
 
 ## 6. Workforce reporting obligation
 
-Every workforce member must report any suspected security incident **immediately** — at minimum, within 1 hour of noticing it. Report by `[ANNA CONTACT METHOD]` (e.g. a dedicated Slack channel, a ticketing address, a phone tree). Failure to report is a sanction-eligible violation under [SANCTIONS.md](SANCTIONS.md).
+Every workforce member must report any suspected security incident **immediately** — at minimum, within 1 hour of noticing it. Report by `aimun@annaautismcare.com` (e.g. a dedicated Slack channel, a ticketing address, a phone tree). Failure to report is a sanction-eligible violation under [SANCTIONS.md](SANCTIONS.md).
 
 Non-retaliation: no workforce member will face retaliation for reporting in good faith.
 
@@ -99,12 +99,12 @@ Populate at activation; re-verify quarterly.
 
 | Role | Name | Phone | Email |
 |---|---|---|---|
-| HIPAA Security Officer | `[NAME]` | `[PHONE]` | `[EMAIL]` |
-| HIPAA Privacy Officer | `[NAME]` | `[PHONE]` | `[EMAIL]` |
-| Engineering on-call | `[ANNA CONTACT]` | `[PHONE]` | `[EMAIL]` |
-| External counsel | `[NAME / FIRM]` | `[PHONE]` | `[EMAIL]` |
+| HIPAA Security Officer | `Aimun Malik` | `[PHONE]` | `aimun@annaautismcare.com` |
+| HIPAA Privacy Officer | `Aimun Malik` | `[PHONE]` | `aimun@annaautismcare.com` |
+| Engineering on-call | `aimun@annaautismcare.com` | `[PHONE]` | `aimun@annaautismcare.com` |
+| External counsel | `[NAME / FIRM]` | `[PHONE]` | `aimun@annaautismcare.com` |
 | AWS Enterprise Support | `[CASE LINK / PHONE]` | | |
-| Cyber insurance broker | `[NAME]` | `[PHONE]` | `[EMAIL]` |
+| Cyber insurance broker | `Aimun Malik` | `[PHONE]` | `aimun@annaautismcare.com` |
 
 ## 8. Documentation
 
@@ -114,7 +114,7 @@ Every incident, whether or not it becomes a breach, is documented and retained f
 
 | Role | Name | Signature | Date |
 |---|---|---|---|
-| HIPAA Security Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
-| HIPAA Privacy Officer | `[NAME]`, `[TITLE]` | ____________________ | `[DATE]` |
+| HIPAA Security Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
+| HIPAA Privacy Officer | `Aimun Malik`, `Founder / HIPAA Security & Privacy Officer` | ____________________ | `[DATE]` |
 
 Effective date: `[DATE]`. Next review: `[DATE + 1 year]`.

@@ -84,6 +84,12 @@ variable "waf_rate_limit" {
   default     = 2000
 }
 
+variable "alarm_email" {
+  description = "Email subscribed to the alarms SNS topic. AWS sends a one-time confirmation link — click it once after first apply."
+  type        = string
+  default     = "aimun@annaautismcare.com"
+}
+
 variable "github_org" {
   description = "GitHub org/owner for the OIDC trust policy."
   type        = string
