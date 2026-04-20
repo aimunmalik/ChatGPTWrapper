@@ -16,5 +16,10 @@ module "edge" {
   rate_limit_per_5min = var.waf_rate_limit
   csp_connect_extra   = local.csp_connect_extra
 
+  # Streaming path (/api/chat-stream) is disabled. Python Lambda doesn't
+  # support native response streaming; to re-enable, pass the function URL
+  # domain here and add a lambda_chat_stream module call in backend_compute.tf.
+  # chat_stream_origin_domain = module.lambda_chat_stream.function_url_domain
+
   tags = local.tags
 }

@@ -27,6 +27,12 @@ variable "csp_connect_extra" {
   default     = ""
 }
 
+variable "chat_stream_origin_domain" {
+  description = "Domain of the streaming chat Lambda Function URL (e.g. abc.lambda-url.us-east-1.on.aws). Empty = no /api/chat-stream behavior."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags applied to all resources in the module."
   type        = map(string)

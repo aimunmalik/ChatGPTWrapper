@@ -13,6 +13,11 @@ output "cloudfront_hosted_zone_id" {
   value       = aws_cloudfront_distribution.spa.hosted_zone_id
 }
 
+output "cloudfront_distribution_arn" {
+  description = "CloudFront distribution ARN (used in Lambda permissions for OAC access)."
+  value       = aws_cloudfront_distribution.spa.arn
+}
+
 output "cloudfront_url" {
   description = "Full https:// URL of the CloudFront distribution."
   value       = "https://${aws_cloudfront_distribution.spa.domain_name}"

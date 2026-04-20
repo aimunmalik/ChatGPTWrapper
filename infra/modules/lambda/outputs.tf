@@ -27,3 +27,13 @@ output "log_group_name" {
   description = "CloudWatch log group for the function."
   value       = aws_cloudwatch_log_group.this.name
 }
+
+output "function_url" {
+  description = "Lambda Function URL (null when not enabled). Format: https://<id>.lambda-url.<region>.on.aws/"
+  value       = var.function_url_enabled ? aws_lambda_function_url.this[0].function_url : null
+}
+
+output "function_url_domain" {
+  description = "Domain-only form of the Function URL (for use as a CloudFront origin)."
+  value       = var.function_url_enabled ? replace(replace(aws_lambda_function_url.this[0].function_url, "https://", ""), "/", "") : null
+}

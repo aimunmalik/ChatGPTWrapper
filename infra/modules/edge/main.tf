@@ -108,6 +108,14 @@ resource "aws_cloudfront_origin_access_control" "spa" {
   signing_protocol                  = "sigv4"
 }
 
+resource "aws_cloudfront_origin_access_control" "chat_stream" {
+  count                             = var.chat_stream_origin_domain != "" ? 1 : 0
+  name                              = "${local.name_prefix}-chat-stream-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
 resource "aws_cloudfront_response_headers_policy" "spa" {
   name = "${local.name_prefix}-spa-security-headers"
 
@@ -169,6 +177,24 @@ resource "aws_cloudfront_distribution" "spa" {
     origin_access_control_id = aws_cloudfront_origin_access_control.spa.id
   }
 
+  dynamic "origin" {
+    for_each = var.chat_stream_origin_domain != "" ? [1] : []
+    content {
+      origin_id                = "chat-stream-lambda"
+      domain_name              = var.chat_stream_origin_domain
+      origin_access_control_id = aws_cloudfront_origin_access_control.chat_stream[0].id
+
+      custom_origin_config {
+        http_port              = 80
+        https_port             = 443
+        origin_protocol_policy = "https-only"
+        origin_ssl_protocols   = ["TLSv1.2"]
+        origin_read_timeout    = 60
+        origin_keepalive_timeout = 60
+      }
+    }
+  }
+
   default_cache_behavior {
     target_origin_id       = "spa-s3"
     viewer_protocol_policy = "redirect-to-https"
@@ -179,6 +205,22 @@ resource "aws_cloudfront_distribution" "spa" {
     cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
     origin_request_policy_id   = "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf" # CORS-S3Origin
     response_headers_policy_id = aws_cloudfront_response_headers_policy.spa.id
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = var.chat_stream_origin_domain != "" ? [1] : []
+    content {
+      path_pattern           = "/api/chat-stream"
+      target_origin_id       = "chat-stream-lambda"
+      viewer_protocol_policy = "https-only"
+      compress               = false  # streaming responses; no buffering
+
+      allowed_methods = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+      cached_methods  = ["GET", "HEAD"]
+
+      cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
+      origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AllViewerExceptHostHeader
+    }
   }
 
   custom_error_response {

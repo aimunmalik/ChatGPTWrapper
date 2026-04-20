@@ -75,6 +75,12 @@ module "lambda_conversations" {
   tags = local.tags
 }
 
+# Streaming chat Lambda was deliberately removed in Phase 6b cleanup.
+# Python Lambda does not support native response streaming (Node.js does).
+# To re-enable: rewrite as Node.js OR Python + Lambda Web Adapter, then
+# re-add this module block + the CloudFront /api/chat-stream behavior in
+# edge.tf, and add an aws_lambda_permission for CloudFront OAC.
+
 module "api" {
   source = "../../modules/api"
 
@@ -82,7 +88,7 @@ module "api" {
   cognito_user_pool_id  = module.cognito.user_pool_id
   cognito_spa_client_id = module.cognito.spa_client_id
 
-  cors_allow_origins = concat(var.cors_allow_origins, [module.edge.cloudfront_url])
+  cors_allow_origins = var.cors_allow_origins
 
   log_retention_days = var.log_retention_days
   logs_kms_key_arn   = module.kms_logs.key_arn

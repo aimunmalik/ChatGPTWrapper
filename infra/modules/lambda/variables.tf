@@ -85,6 +85,29 @@ variable "bedrock_model_arns" {
   default     = []
 }
 
+variable "function_url_enabled" {
+  description = "Whether to create a Lambda Function URL. Needed for response streaming; otherwise Lambda is invoked via API Gateway."
+  type        = bool
+  default     = false
+}
+
+variable "function_url_invoke_mode" {
+  description = "Function URL invoke mode. Use RESPONSE_STREAM for streaming Lambdas, BUFFERED otherwise."
+  type        = string
+  default     = "BUFFERED"
+
+  validation {
+    condition     = contains(["BUFFERED", "RESPONSE_STREAM"], var.function_url_invoke_mode)
+    error_message = "Must be BUFFERED or RESPONSE_STREAM."
+  }
+}
+
+variable "function_url_cors_origins" {
+  description = "Origins allowed in the Function URL CORS config. Include both local dev and the deployed SPA origin."
+  type        = list(string)
+  default     = []
+}
+
 variable "tags" {
   description = "Tags applied to resources created by this module."
   type        = map(string)

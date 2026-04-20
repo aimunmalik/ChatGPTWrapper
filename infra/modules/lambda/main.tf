@@ -152,3 +152,19 @@ resource "aws_lambda_function" "this" {
     aws_iam_role_policy_attachment.vpc_execution,
   ]
 }
+
+# ──────────────────────────────────────────────────────────────────────────
+# Optional Lambda Function URL (for response streaming — API Gateway HTTP
+# APIs don't support Lambda response streaming, Function URLs do).
+# ──────────────────────────────────────────────────────────────────────────
+
+resource "aws_lambda_function_url" "this" {
+  count              = var.function_url_enabled ? 1 : 0
+  function_name      = aws_lambda_function.this.function_name
+  authorization_type = "AWS_IAM"
+  invoke_mode        = var.function_url_invoke_mode
+}
+
+# Lambda permission for CloudFront OAC access is added from the env root
+# module (infra/envs/*/edge.tf) to avoid a dependency cycle between the
+# lambda and edge modules.
