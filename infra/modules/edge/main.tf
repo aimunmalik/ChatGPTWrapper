@@ -141,9 +141,9 @@ resource "aws_cloudfront_response_headers_policy" "spa" {
       content_security_policy = join("; ", [
         "default-src 'self'",
         "script-src 'self'",
-        "style-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data: blob:",
-        "font-src 'self' data:",
+        "font-src 'self' data: https://fonts.gstatic.com",
         "connect-src 'self' ${var.csp_connect_extra}",
         "frame-ancestors 'none'",
         "base-uri 'self'",
