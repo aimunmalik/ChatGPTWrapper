@@ -11,7 +11,7 @@ interface Props {
 export function Message({ role, content, pending }: Props) {
   return (
     <div className={clsx("message", `message--${role}`)}>
-      <div className="message__role">{role === "user" ? "You" : "ANNA Chat"}</div>
+      <div className="message__role">{role === "user" ? "You" : "Praxis"}</div>
       <div className="message__body">
         {pending ? (
           <span className="message__dots" aria-label="Thinking">

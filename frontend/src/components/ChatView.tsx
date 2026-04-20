@@ -4,6 +4,7 @@ import { postChat } from "../api/chat";
 import type { MessageSummary } from "../api/conversations";
 import { DEFAULT_MODEL, ModelPicker } from "./ModelPicker";
 import { Message } from "./Message";
+import { MessagesSkeleton } from "./Skeleton";
 
 const MODEL_STORAGE_KEY = "anna-chat:model";
 
@@ -42,6 +43,16 @@ export function ChatView({
   useEffect(() => {
     window.localStorage.setItem(MODEL_STORAGE_KEY, model);
   }, [model]);
+
+  // Listen for model changes triggered by the command palette.
+  useEffect(() => {
+    const handler = () => {
+      const stored = window.localStorage.getItem(MODEL_STORAGE_KEY);
+      if (stored) setModel(stored);
+    };
+    window.addEventListener("praxis:model-changed", handler);
+    return () => window.removeEventListener("praxis:model-changed", handler);
+  }, []);
 
   useEffect(() => {
     if (activeConvRef.current !== conversationId) {
@@ -114,14 +125,14 @@ export function ChatView({
         <ModelPicker value={model} onChange={setModel} disabled={sending} />
       </div>
       <div className="chat__messages">
-        {loading && <div className="chat__status">Loading conversation…</div>}
+        {loading && <MessagesSkeleton />}
         {!loading && displayed.length === 0 && (
           <div className="chat__empty">
             <img src="/anna_logo.png" alt="" className="chat__empty-logo" />
-            <h2>Start a new conversation</h2>
-            <p>
-              Ask ANNA Chat anything. Your messages are encrypted end-to-end within AWS
-              and stored in your HIPAA-covered environment.
+            <h2 className="chat__empty-title">How can Praxis help today?</h2>
+            <p className="chat__empty-body">
+              Ask a clinical question, analyze a treatment plan, or draft a note.
+              All conversations stay inside ANNA's HIPAA-covered AWS environment.
             </p>
           </div>
         )}
@@ -144,7 +155,7 @@ export function ChatView({
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Send a message to ANNA Chat…"
+          placeholder="Message Praxis…"
           rows={3}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {

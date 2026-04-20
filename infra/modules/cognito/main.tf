@@ -26,9 +26,9 @@ resource "aws_cognito_user_pool" "this" {
     allow_admin_create_user_only = true
 
     invite_message_template {
-      email_subject = "Your ANNA Chat account"
-      email_message = "Hello,\n\nYou have been invited to ANNA Chat.\nUsername: {username}\nTemporary password: {####}\n\nSign in at the URL provided by your ANNA administrator.\n\nThis is a HIPAA-protected system — do not share credentials."
-      sms_message   = "ANNA Chat: username {username}, temp password {####}"
+      email_subject = "Welcome to Praxis · by ANNA"
+      email_message = "Hello,\n\nYou have been invited to Praxis, ANNA's clinical intelligence platform.\n\nUsername: {username}\nTemporary password: {####}\n\nSign in at the URL provided by your ANNA administrator. You'll be asked to set a new password and enroll an authenticator app on first sign-in.\n\nPraxis handles protected health information under ANNA's HIPAA Business Associate Agreement — do not share your credentials."
+      sms_message   = "Praxis by ANNA — username {username}, temp password {####}"
     }
   }
 

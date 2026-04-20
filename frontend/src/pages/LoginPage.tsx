@@ -17,9 +17,10 @@ export function LoginPage() {
 
   return (
     <div className="login-shell">
-      <img src="/anna_logo.png" alt="ANNA Health" className="login-logo" />
-      <h1>ANNA Chat</h1>
-      <p>Redirecting you to sign in…</p>
+      <img src="/anna_logo.png" alt="ANNA" className="login-logo" />
+      <h1 className="login-wordmark">Praxis</h1>
+      <p className="login-tagline">Clinical intelligence, by ANNA</p>
+      <p className="login-status">Redirecting you to sign in…</p>
       {auth.error && (
         <div className="error">
           <p>{auth.error.message}</p>

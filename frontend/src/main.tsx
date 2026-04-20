@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import { oidcConfig } from "./auth/oidcConfig";
+import { ThemeProvider } from "./theme/ThemeContext";
 import "./styles/global.css";
 
 const rootEl = document.getElementById("root");
@@ -14,10 +15,12 @@ if (!rootEl) {
 
 createRoot(rootEl).render(
   <StrictMode>
-    <AuthProvider {...oidcConfig}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider {...oidcConfig}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

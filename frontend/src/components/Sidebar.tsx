@@ -3,6 +3,7 @@ import clsx from "clsx";
 
 import type { Conversation } from "../api/conversations";
 import { deleteConversation } from "../api/conversations";
+import { SidebarSkeleton } from "./Skeleton";
 
 interface Props {
   conversations: Conversation[];
@@ -46,7 +47,7 @@ export function Sidebar({
         + New chat
       </button>
 
-      {loading && <div className="sidebar__status">Loading…</div>}
+      {loading && <SidebarSkeleton />}
       {error && <div className="sidebar__status error">{error}</div>}
 
       <ul className="sidebar__list">
@@ -79,8 +80,15 @@ export function Sidebar({
       </ul>
 
       {!loading && conversations.length === 0 && !error && (
-        <div className="sidebar__empty">No conversations yet.</div>
+        <div className="sidebar__empty">No conversations yet.<br/>Start one on the right.</div>
       )}
+
+      <div className="sidebar__hint">
+        <span>Quick search</span>
+        <span>
+          <span className="kbd">⌘</span> <span className="kbd">K</span>
+        </span>
+      </div>
     </aside>
   );
 }

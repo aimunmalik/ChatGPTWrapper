@@ -1,18 +1,26 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "react-oidc-context";
 
 import { ChatView } from "../components/ChatView";
+import type { Command } from "../components/CommandPalette";
+import { CommandPalette } from "../components/CommandPalette";
 import { Layout } from "../components/Layout";
+import { MODEL_OPTIONS } from "../components/ModelPicker";
 import { Sidebar } from "../components/Sidebar";
 import type { Conversation, MessageSummary } from "../api/conversations";
 import {
   getConversationMessages,
   listConversations,
 } from "../api/conversations";
+import { buildLogoutUrl } from "../auth/oidcConfig";
+import { useTheme } from "../theme/ThemeContext";
+
+const MODEL_STORAGE_KEY = "anna-chat:model";
 
 export function ChatPage() {
   const auth = useAuth();
   const accessToken = auth.user?.access_token ?? "";
+  const theme = useTheme();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -20,6 +28,7 @@ export function ChatPage() {
   const [loadingList, setLoadingList] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -28,9 +37,7 @@ export function ChatPage() {
     setListError(null);
     listConversations(accessToken)
       .then((resp) => {
-        if (!cancelled) {
-          setConversations(resp.conversations);
-        }
+        if (!cancelled) setConversations(resp.conversations);
       })
       .catch((err) => {
         if (!cancelled) setListError(err.message);
@@ -52,9 +59,7 @@ export function ChatPage() {
     setLoadingMessages(true);
     getConversationMessages(accessToken, activeId)
       .then((resp) => {
-        if (!cancelled) {
-          setMessages(resp.messages);
-        }
+        if (!cancelled) setMessages(resp.messages);
       })
       .catch(() => {
         if (!cancelled) setMessages([]);
@@ -66,6 +71,30 @@ export function ChatPage() {
       cancelled = true;
     };
   }, [accessToken, activeId]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const isMod = e.metaKey || e.ctrlKey;
+      if (isMod && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  const handleNewChat = useCallback(() => {
+    setActiveId(null);
+    setMessages([]);
+  }, []);
+
+  const handleSignOut = useCallback(() => {
+    const idToken = auth.user?.id_token;
+    void auth.removeUser().finally(() => {
+      window.location.href = buildLogoutUrl(idToken);
+    });
+  }, [auth]);
 
   function handleConversationCreated(convId: string, title: string) {
     setActiveId(convId);
@@ -85,37 +114,86 @@ export function ChatPage() {
   }
 
   function handleConversationDeleted(convId: string) {
-    setConversations((prev) =>
-      prev.filter((c) => c.conversationId !== convId),
-    );
+    setConversations((prev) => prev.filter((c) => c.conversationId !== convId));
     if (activeId === convId) {
       setActiveId(null);
       setMessages([]);
     }
   }
 
+  const commands = useMemo<Command[]>(() => {
+    const actions: Command[] = [
+      {
+        id: "new-chat",
+        label: "New chat",
+        group: "Actions",
+        hint: "Start a fresh conversation",
+        onRun: handleNewChat,
+      },
+      {
+        id: "toggle-theme",
+        label: theme.resolved === "dark" ? "Switch to light mode" : "Switch to dark mode",
+        group: "Appearance",
+        keywords: "dark light theme mode",
+        onRun: theme.toggle,
+      },
+      {
+        id: "sign-out",
+        label: "Sign out",
+        group: "Actions",
+        hint: "End your session",
+        keywords: "logout exit",
+        onRun: handleSignOut,
+      },
+    ];
+
+    const models: Command[] = MODEL_OPTIONS.map((m) => ({
+      id: `model-${m.id}`,
+      label: `Use ${m.label}`,
+      group: "Model",
+      hint: m.hint,
+      onRun: () => {
+        window.localStorage.setItem(MODEL_STORAGE_KEY, m.id);
+        window.dispatchEvent(new Event("praxis:model-changed"));
+      },
+    }));
+
+    const conversationCmds: Command[] = conversations.slice(0, 20).map((c) => ({
+      id: `conv-${c.conversationId}`,
+      label: c.title,
+      group: "Open conversation",
+      onRun: () => setActiveId(c.conversationId),
+    }));
+
+    return [...actions, ...models, ...conversationCmds];
+  }, [conversations, handleNewChat, handleSignOut, theme]);
+
   return (
-    <Layout>
-      <Sidebar
-        conversations={conversations}
-        activeId={activeId}
-        loading={loadingList}
-        error={listError}
-        onSelect={(id) => setActiveId(id)}
-        onNewChat={() => {
-          setActiveId(null);
-          setMessages([]);
-        }}
-        onDelete={handleConversationDeleted}
-        accessToken={accessToken}
+    <>
+      <Layout onOpenCommandPalette={() => setPaletteOpen(true)}>
+        <Sidebar
+          conversations={conversations}
+          activeId={activeId}
+          loading={loadingList}
+          error={listError}
+          onSelect={(id) => setActiveId(id)}
+          onNewChat={handleNewChat}
+          onDelete={handleConversationDeleted}
+          accessToken={accessToken}
+        />
+        <ChatView
+          conversationId={activeId}
+          initialMessages={messages}
+          loading={loadingMessages}
+          accessToken={accessToken}
+          onConversationCreated={handleConversationCreated}
+        />
+      </Layout>
+      <CommandPalette
+        open={paletteOpen}
+        commands={commands}
+        onClose={() => setPaletteOpen(false)}
       />
-      <ChatView
-        conversationId={activeId}
-        initialMessages={messages}
-        loading={loadingMessages}
-        accessToken={accessToken}
-        onConversationCreated={handleConversationCreated}
-      />
-    </Layout>
+    </>
   );
 }
