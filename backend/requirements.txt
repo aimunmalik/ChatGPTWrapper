@@ -1,3 +1,5 @@
-# No runtime-only deps beyond what Lambda's Python runtime provides.
-# boto3 is pre-installed in the Lambda runtime.
+# Lambda runtime provides boto3 and the Python stdlib.
 # JWT verification is handled by API Gateway's JWT authorizer (see infra/modules/api).
+# Attachment extraction deps:
+openpyxl==3.1.5
+python-docx==1.1.2

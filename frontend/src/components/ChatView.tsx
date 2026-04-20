@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { postChat } from "../api/chat";
 import type { MessageSummary } from "../api/conversations";
+import { useAttachmentUpload } from "../hooks/useAttachmentUpload";
+import { AttachmentChip } from "./AttachmentChip";
+import { AttachmentPicker } from "./AttachmentPicker";
 import { DEFAULT_MODEL, ModelPicker } from "./ModelPicker";
 import { Message } from "./Message";
 import { MessagesSkeleton } from "./Skeleton";
@@ -40,6 +43,12 @@ export function ChatView({
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const activeConvRef = useRef<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const {
+    attachments,
+    uploadFiles,
+    removeAttachment,
+  } = useAttachmentUpload({ accessToken, conversationId });
 
   useEffect(() => {
     window.localStorage.setItem(MODEL_STORAGE_KEY, model);
@@ -175,7 +184,35 @@ export function ChatView({
         </div>
       )}
 
-      <form className="chat__composer" onSubmit={handleSubmit}>
+      {attachments.length > 0 && (
+        <div className="chat__attachments">
+          {attachments.map((a) => (
+            <AttachmentChip
+              key={a.attachmentId}
+              attachment={a}
+              onRemove={removeAttachment}
+            />
+          ))}
+        </div>
+      )}
+
+      <form
+        className="chat__composer chat__composer--with-picker"
+        onSubmit={handleSubmit}
+      >
+        <div
+          className="chat__composer-picker"
+          title={
+            !conversationId
+              ? "Send a first message to start attaching files"
+              : undefined
+          }
+        >
+          <AttachmentPicker
+            onFiles={(files) => void uploadFiles(files)}
+            disabled={sending || !conversationId}
+          />
+        </div>
         <textarea
           ref={textareaRef}
           value={input}

@@ -22,6 +22,10 @@ def _settings() -> Settings:
         messages_table="t-msg",
         bedrock_model_id="any",
         message_ttl_days=90,
+        attachments_table="t-att",
+        attachments_bucket="b-att",
+        attachments_max_size_bytes=52428800,
+        attachments_max_text_bytes=512000,
     )
 
 

@@ -85,6 +85,18 @@ variable "bedrock_model_arns" {
   default     = []
 }
 
+variable "s3_bucket_arns" {
+  description = "ARNs of S3 buckets the Lambda can read, write, and delete objects in. Object-level actions are scoped to <arn>/*."
+  type        = list(string)
+  default     = []
+}
+
+variable "textract_enabled" {
+  description = "Whether to grant Textract document-text detection permissions to the Lambda."
+  type        = bool
+  default     = false
+}
+
 variable "function_url_enabled" {
   description = "Whether to create a Lambda Function URL. Needed for response streaming; otherwise Lambda is invoked via API Gateway."
   type        = bool
