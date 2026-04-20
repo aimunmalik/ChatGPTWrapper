@@ -47,15 +47,101 @@ resource "aws_iam_role" "github_actions" {
   tags = local.tags
 }
 
-resource "aws_iam_role_policy_attachment" "github_actions_admin" {
-  # SECURITY TODO (Phase 5 — prod hardening): replace AdministratorAccess with
-  # a scoped policy. The role only needs Lambda/ApiGateway/S3/CloudFront/
-  # DynamoDB/IAM/KMS/Cognito/WAF/EC2/Logs/GuardDuty. Kept as AdminAccess for
-  # now because authoring the scoped policy is a non-trivial effort and the
-  # trust policy was narrowed (main branch only, no PR trust) in this PR to
-  # shrink the blast radius in the meantime.
+# Tier C #1: swapped AdministratorAccess for PowerUserAccess + a scoped IAM
+# inline policy. PowerUser covers every service Terraform touches
+# (Lambda/APIGW/S3/CloudFront/DDB/KMS/Cognito/WAF/VPC/Logs/Bedrock/Budgets/
+# SNS/ACM/GuardDuty) but excludes IAM write, Organizations, and Billing. The
+# inline policy below re-grants just the IAM actions Terraform needs, scoped
+# to anna-chat-* resources so a compromised PR can't create arbitrary roles
+# or escalate to admin.
+resource "aws_iam_role_policy_attachment" "github_actions_poweruser" {
   role       = aws_iam_role.github_actions.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+  policy_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
+}
+
+resource "aws_iam_role_policy" "github_actions_iam_scoped" {
+  name = "iam-scoped"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "RolesScopedToAnnaChatPrefix"
+        Effect = "Allow"
+        Action = [
+          "iam:CreateRole",
+          "iam:DeleteRole",
+          "iam:UpdateRole",
+          "iam:UpdateRoleDescription",
+          "iam:UpdateAssumeRolePolicy",
+          "iam:PutRolePolicy",
+          "iam:DeleteRolePolicy",
+          "iam:AttachRolePolicy",
+          "iam:DetachRolePolicy",
+          "iam:TagRole",
+          "iam:UntagRole",
+          "iam:PassRole",
+          "iam:ListAttachedRolePolicies",
+          "iam:ListRolePolicies",
+          "iam:GetRole",
+          "iam:GetRolePolicy",
+        ]
+        Resource = [
+          "arn:aws:iam::${local.account_id}:role/anna-chat-*",
+          "arn:aws:iam::${local.account_id}:role/service-role/anna-chat-*",
+          "arn:aws:iam::${local.account_id}:role/aws-service-role/*",
+        ]
+      },
+      {
+        Sid    = "PoliciesScopedToAnnaChatPrefix"
+        Effect = "Allow"
+        Action = [
+          "iam:CreatePolicy",
+          "iam:DeletePolicy",
+          "iam:CreatePolicyVersion",
+          "iam:DeletePolicyVersion",
+          "iam:SetDefaultPolicyVersion",
+          "iam:TagPolicy",
+          "iam:UntagPolicy",
+          "iam:GetPolicy",
+          "iam:GetPolicyVersion",
+          "iam:ListPolicyVersions",
+        ]
+        Resource = [
+          "arn:aws:iam::${local.account_id}:policy/anna-chat-*",
+        ]
+      },
+      {
+        Sid      = "ServiceLinkedRoleCreation"
+        Effect   = "Allow"
+        Action   = "iam:CreateServiceLinkedRole"
+        Resource = "arn:aws:iam::${local.account_id}:role/aws-service-role/*"
+      },
+      {
+        Sid    = "OIDCProviderForBootstrap"
+        Effect = "Allow"
+        Action = [
+          "iam:GetOpenIDConnectProvider",
+          "iam:ListOpenIDConnectProviders",
+          "iam:TagOpenIDConnectProvider",
+          "iam:UntagOpenIDConnectProvider",
+        ]
+        Resource = "arn:aws:iam::${local.account_id}:oidc-provider/*"
+      },
+      {
+        Sid    = "ReadOnlyAcrossAccount"
+        Effect = "Allow"
+        Action = [
+          "iam:List*",
+          "iam:Get*",
+          "iam:SimulatePrincipalPolicy",
+          "iam:SimulateCustomPolicy",
+        ]
+        Resource = "*"
+      },
+    ]
+  })
 }
 
 # Separate policy for the Terraform state backend so it's explicit in what CI

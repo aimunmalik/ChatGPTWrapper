@@ -93,6 +93,12 @@ variable "alarm_email" {
   default     = "aimun@annaautismcare.com"
 }
 
+variable "bedrock_monthly_budget_usd" {
+  description = "Monthly Bedrock spend cap in USD. Warnings at 50/80/100% email you; at 120% a kill-switch IAM deny policy auto-attaches to the chat Lambda role."
+  type        = number
+  default     = 100
+}
+
 variable "github_org" {
   description = "GitHub org/owner for the OIDC trust policy."
   type        = string

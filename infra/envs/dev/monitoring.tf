@@ -154,6 +154,28 @@ resource "aws_cloudwatch_metric_alarm" "ddb_throttles" {
 
 # ── Billing anomaly (account-wide) ───────────────────────────────────────
 
+# Near-real-time Bedrock runaway detection (budgets are lagging by 24-48h).
+# A normal day has maybe 100-500 invocations across all users. 500 invocations
+# in a single 5-minute window almost certainly indicates a recursive bug,
+# prompt injection loop, or a compromised user session hammering the API.
+resource "aws_cloudwatch_metric_alarm" "bedrock_runaway" {
+  alarm_name          = "anna-chat-${var.env}-bedrock-runaway"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  metric_name         = "Invocations"
+  namespace           = "AWS/Bedrock"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 500
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "Bedrock invocations > 500 in 5 min. Likely a runaway loop. Check /aws/lambda/anna-chat-${var.env}-chat logs; consider attaching the bedrock-kill-switch policy manually while diagnosing."
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = local.tags
+}
+
 resource "aws_cloudwatch_metric_alarm" "billing_anomaly" {
   alarm_name          = "anna-chat-${var.env}-billing-over-100usd"
   comparison_operator = "GreaterThanThreshold"
