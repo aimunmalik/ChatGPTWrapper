@@ -101,6 +101,11 @@ output "attachments_table_name" {
   value       = module.attachments.table_name
 }
 
+output "prompts_table_name" {
+  description = "DynamoDB table storing per-user prompt templates."
+  value       = module.prompts.table_name
+}
+
 output "github_actions_role_arn" {
   description = "IAM role ARN assumed by GitHub Actions via OIDC. Set this as the AWS_ROLE_ARN GitHub repo variable."
   value       = aws_iam_role.github_actions.arn

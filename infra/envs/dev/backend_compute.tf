@@ -12,6 +12,7 @@ locals {
     ATTACHMENTS_MAX_TEXT_BYTES = "512000"
     BEDROCK_MODEL_ID           = var.bedrock_model_id
     MESSAGE_TTL_DAYS           = tostring(var.message_ttl_days)
+    PROMPTS_TABLE              = module.prompts.table_name
   }
 
   bedrock_model_arns = [
@@ -178,6 +179,48 @@ module "lambda_attachments" {
   tags = local.tags
 }
 
+# ──────────────────────────────────────────────────────────────────────────
+# Phase 6d: per-user prompt library
+# ──────────────────────────────────────────────────────────────────────────
+
+module "prompts" {
+  source = "../../modules/prompts"
+
+  env                 = var.env
+  kms_key_arn         = module.kms_dynamodb.key_arn
+  deletion_protection = var.env == "prod"
+
+  tags = local.tags
+}
+
+# Prompts CRUD handler — full create/list/update/delete for a user's prompt
+# library. Only needs the prompts table and the DDB CMK.
+module "lambda_prompts" {
+  source = "../../modules/lambda"
+
+  function_name   = "anna-chat-${var.env}-prompts"
+  handler         = "anna_chat.handlers.prompts.handler"
+  zip_path        = local.lambda_zip_path
+  timeout_seconds = 15
+  memory_mb       = 512
+
+  environment_variables = merge(local.lambda_env, {
+    AWS_LAMBDA_LOG_FORMAT = "JSON"
+  })
+
+  log_retention_days = var.log_retention_days
+  logs_kms_key_arn   = module.kms_logs.key_arn
+
+  vpc_id         = module.network.vpc_id
+  vpc_cidr       = module.network.vpc_cidr
+  vpc_subnet_ids = module.network.private_subnet_ids
+
+  dynamodb_table_arns = [module.prompts.table_arn]
+  kms_key_arns        = [module.kms_dynamodb.key_arn]
+
+  tags = local.tags
+}
+
 module "api" {
   source = "../../modules/api"
 
@@ -218,6 +261,22 @@ module "api" {
     "DELETE /attachments/{attachmentId}" = {
       lambda_function_name = module.lambda_attachments.function_name
       lambda_invoke_arn    = module.lambda_attachments.invoke_arn
+    }
+    "POST /prompts" = {
+      lambda_function_name = module.lambda_prompts.function_name
+      lambda_invoke_arn    = module.lambda_prompts.invoke_arn
+    }
+    "GET /prompts" = {
+      lambda_function_name = module.lambda_prompts.function_name
+      lambda_invoke_arn    = module.lambda_prompts.invoke_arn
+    }
+    "PUT /prompts/{promptId}" = {
+      lambda_function_name = module.lambda_prompts.function_name
+      lambda_invoke_arn    = module.lambda_prompts.invoke_arn
+    }
+    "DELETE /prompts/{promptId}" = {
+      lambda_function_name = module.lambda_prompts.function_name
+      lambda_invoke_arn    = module.lambda_prompts.invoke_arn
     }
   }
 

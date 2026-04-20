@@ -26,6 +26,7 @@ def _settings() -> Settings:
         attachments_bucket="b-att",
         attachments_max_size_bytes=52428800,
         attachments_max_text_bytes=512000,
+        prompts_table="t-prompts",
     )
 
 

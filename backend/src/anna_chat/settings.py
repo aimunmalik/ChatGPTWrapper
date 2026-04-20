@@ -15,6 +15,7 @@ class Settings:
     attachments_bucket: str
     attachments_max_size_bytes: int
     attachments_max_text_bytes: int
+    prompts_table: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -37,4 +38,5 @@ class Settings:
             attachments_max_text_bytes=int(
                 os.environ.get("ATTACHMENTS_MAX_TEXT_BYTES", str(500 * 1024))
             ),
+            prompts_table=os.environ.get("PROMPTS_TABLE", ""),
         )

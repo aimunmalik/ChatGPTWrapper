@@ -6,6 +6,7 @@ import type { Command } from "../components/CommandPalette";
 import { CommandPalette } from "../components/CommandPalette";
 import { Layout } from "../components/Layout";
 import { MODEL_OPTIONS } from "../components/ModelPicker";
+import { PromptLibrary } from "../components/PromptLibrary";
 import { Sidebar } from "../components/Sidebar";
 import type { Conversation, MessageSummary } from "../api/conversations";
 import {
@@ -13,6 +14,7 @@ import {
   listConversations,
 } from "../api/conversations";
 import { buildLogoutUrl } from "../auth/oidcConfig";
+import { usePrompts } from "../hooks/usePrompts";
 import { PROMPT_TEMPLATES } from "../prompts";
 import { useTheme } from "../theme/ThemeContext";
 
@@ -30,6 +32,14 @@ export function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
+
+  const {
+    prompts: userPrompts,
+    create: createUserPrompt,
+    update: updateUserPrompt,
+    remove: removeUserPrompt,
+  } = usePrompts({ accessToken });
 
   useEffect(() => {
     if (!accessToken) return;
@@ -173,6 +183,30 @@ export function ChatPage() {
       },
     }));
 
+    const myPromptCmds: Command[] = userPrompts.map((p) => ({
+      id: `mine-${p.promptId}`,
+      label: p.title,
+      group: "My prompts",
+      keywords: p.body.slice(0, 200),
+      onRun: () => {
+        handleNewChat();
+        window.dispatchEvent(
+          new CustomEvent("praxis:insert-prompt", { detail: { text: p.body } }),
+        );
+      },
+    }));
+
+    const libraryCmds: Command[] = [
+      {
+        id: "manage-prompts",
+        label: "Manage my prompts…",
+        group: "Library",
+        hint: "Create, edit, or delete your saved prompts",
+        keywords: "prompts library manage",
+        onRun: () => setPromptLibraryOpen(true),
+      },
+    ];
+
     const conversationCmds: Command[] = conversations.slice(0, 20).map((c) => ({
       id: `conv-${c.conversationId}`,
       label: c.title,
@@ -180,8 +214,15 @@ export function ChatPage() {
       onRun: () => setActiveId(c.conversationId),
     }));
 
-    return [...actions, ...prompts, ...models, ...conversationCmds];
-  }, [conversations, handleNewChat, handleSignOut, theme]);
+    return [
+      ...actions,
+      ...myPromptCmds,
+      ...prompts,
+      ...libraryCmds,
+      ...models,
+      ...conversationCmds,
+    ];
+  }, [conversations, handleNewChat, handleSignOut, theme, userPrompts]);
 
   return (
     <>
@@ -208,6 +249,15 @@ export function ChatPage() {
         open={paletteOpen}
         commands={commands}
         onClose={() => setPaletteOpen(false)}
+      />
+      <PromptLibrary
+        open={promptLibraryOpen}
+        onClose={() => setPromptLibraryOpen(false)}
+        prompts={userPrompts}
+        onCreate={createUserPrompt}
+        onUpdate={updateUserPrompt}
+        onDelete={removeUserPrompt}
+        starterTemplates={PROMPT_TEMPLATES}
       />
     </>
   );
