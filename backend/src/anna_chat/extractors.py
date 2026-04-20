@@ -16,12 +16,27 @@ from __future__ import annotations
 
 import csv
 import io
+import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 
 import boto3
+import defusedxml
+
+# Harden stdlib XML parsers against XXE, billion-laughs, etc. python-docx and
+# openpyxl delegate XML parsing to the stdlib / lxml; defusedxml monkey-patches
+# the common entry points so any parse call in this process is safe-by-default.
+defusedxml.defuse_stdlib()
 
 DEFAULT_MAX_TEXT_BYTES = 500 * 1024
+
+# Zip-bomb defenses for attacker-controlled OOXML (xlsx, docx). Both formats
+# are ZIP containers; a tiny compressed payload can expand to gigabytes and
+# OOM the 2 GB Lambda. We reject anything whose uncompressed total exceeds
+# MAX_ZIP_TOTAL_BYTES or whose per-entry compression ratio exceeds
+# MAX_ZIP_COMPRESSION_RATIO before handing the bytes to openpyxl / python-docx.
+MAX_ZIP_TOTAL_BYTES = 250 * 1024 * 1024
+MAX_ZIP_COMPRESSION_RATIO = 100
 
 PDF_MIME = "application/pdf"
 PNG_MIME = "image/png"
@@ -48,6 +63,41 @@ class ExtractionResult:
 
 class UnsupportedContentType(Exception):
     pass
+
+
+class ZipBombError(Exception):
+    """Raised when a ZIP-based document (xlsx/docx) looks like a zip bomb.
+
+    The message is intentionally generic so we don't echo attacker-crafted
+    entry names or sizes back through logs or the UI.
+    """
+
+    pass
+
+
+def _guard_office_zip(data: bytes) -> None:
+    """Reject xlsx/docx payloads that look like zip bombs.
+
+    Checks the zip central directory without extracting anything:
+      - total uncompressed size across all entries <= MAX_ZIP_TOTAL_BYTES
+      - per-entry compression ratio <= MAX_ZIP_COMPRESSION_RATIO
+
+    Raises ZipBombError on violation.
+    """
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            infos = zf.infolist()
+    except zipfile.BadZipFile as exc:
+        raise ZipBombError("document failed zip safety checks") from exc
+
+    total = 0
+    for info in infos:
+        total += info.file_size
+        if total > MAX_ZIP_TOTAL_BYTES:
+            raise ZipBombError("document failed zip safety checks")
+        ratio = info.file_size / max(info.compress_size, 1)
+        if ratio > MAX_ZIP_COMPRESSION_RATIO:
+            raise ZipBombError("document failed zip safety checks")
 
 
 def extract(
@@ -100,6 +150,7 @@ def _extract_xlsx(data: bytes) -> str:
     # Local import: optional runtime dep, only when XLSX hits this path.
     from openpyxl import load_workbook
 
+    _guard_office_zip(data)
     wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     parts: list[str] = []
     for sheet in wb.worksheets:
@@ -115,6 +166,7 @@ def _extract_xlsx(data: bytes) -> str:
 def _extract_docx(data: bytes) -> str:
     from docx import Document  # python-docx
 
+    _guard_office_zip(data)
     doc = Document(io.BytesIO(data))
     parts: list[str] = []
     for paragraph in doc.paragraphs:

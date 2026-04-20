@@ -23,11 +23,16 @@ data "aws_iam_policy_document" "github_actions_trust" {
     }
 
     condition {
+      # Trust only workflow runs from the main branch. We deliberately do NOT
+      # trust `pull_request` here — doing so means any PR (including from a
+      # contributor whose patch modifies the workflow) could assume a role
+      # that currently holds AdministratorAccess. The PR-time `terraform-plan`
+      # job was removed from .github/workflows/ci.yml as a consequence; the
+      # deploy workflow still runs plan+apply on merge to main.
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
         "repo:${local.github_repo}:ref:refs/heads/main",
-        "repo:${local.github_repo}:pull_request",
       ]
     }
   }
@@ -43,8 +48,12 @@ resource "aws_iam_role" "github_actions" {
 }
 
 resource "aws_iam_role_policy_attachment" "github_actions_admin" {
-  # Phase 4 MVP: broad permissions for simplicity. Scope down in Phase 5 (prod hardening)
-  # — the role only needs Lambda/ApiGateway/S3/CloudFront/DynamoDB/IAM/KMS/Cognito/WAF/EC2/Logs.
+  # SECURITY TODO (Phase 5 — prod hardening): replace AdministratorAccess with
+  # a scoped policy. The role only needs Lambda/ApiGateway/S3/CloudFront/
+  # DynamoDB/IAM/KMS/Cognito/WAF/EC2/Logs/GuardDuty. Kept as AdminAccess for
+  # now because authoring the scoped policy is a non-trivial effort and the
+  # trust policy was narrowed (main branch only, no PR trust) in this PR to
+  # shrink the blast radius in the meantime.
   role       = aws_iam_role.github_actions.name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }

@@ -93,6 +93,7 @@ A unit test (`backend/tests/test_no_phi_in_logs.py`, to be written in Phase 2) a
 | What | Retention | Why |
 |---|---|---|
 | Messages in DynamoDB | 90 days (user-configurable) via TTL | Minimizes PHI exposure; clinicians can extend per conversation |
+| Attachments in S3 | 90-day S3 Object Lock (governance mode); 180-day lifecycle on current versions | Matches message TTL — attachments are transient clinical context, not an audit record. If forensic retention beyond 90 days is ever required, extend `governance_retention_days` to 2190 (6 years) before uploading material that must be preserved. |
 | CloudTrail events | 7 years | HIPAA audit trail aligned with industry norms |
 | CloudWatch Logs | 90 days | Long enough for incident investigation, short enough to limit exposure |
 | DynamoDB PITR snapshots | 35 days | AWS max, supports rollback |

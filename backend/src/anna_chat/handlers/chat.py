@@ -208,6 +208,9 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
             extra={"status": exc.status, "reason": exc.message},
         )
         return error(exc.status, exc.message)
-    except Exception:
-        logger.exception("chat_unhandled_error")
+    except Exception as exc:
+        logger.error(
+            "chat_unhandled_error",
+            extra={"errorType": type(exc).__name__},
+        )
         return error(500, "internal error")

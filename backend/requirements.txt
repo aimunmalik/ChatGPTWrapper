@@ -3,3 +3,6 @@
 # Attachment extraction deps:
 openpyxl==3.1.5
 python-docx==1.1.2
+# XXE / billion-laughs hardening for openpyxl + python-docx (both call into
+# stdlib/lxml XML parsers). defuse_stdlib() is called at import time.
+defusedxml==0.7.1

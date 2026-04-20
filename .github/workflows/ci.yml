@@ -1,3 +1,9 @@
+# The PR-time `terraform-plan` job was removed intentionally. The CI role's
+# trust policy (infra/envs/dev/ci.tf) no longer accepts `pull_request` OIDC
+# tokens — only `ref:refs/heads/main` — because the role currently holds
+# AdministratorAccess and any PR (including one modifying the workflow) could
+# otherwise assume full admin. Plan+apply still runs on merge to main via
+# deploy.yml; we've traded PR-time plan preview for a tighter trust scope.
 name: ci
 
 on:
@@ -69,45 +75,3 @@ jobs:
           VITE_COGNITO_DOMAIN: ${{ vars.COGNITO_DOMAIN }}
           VITE_API_ENDPOINT: ${{ vars.API_ENDPOINT }}
 
-  terraform-plan:
-    name: Terraform — plan dev
-    # Only on PRs. On main pushes, deploy-dev.yml runs apply which would
-    # race this job for the state lock.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.14.8"
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Build Lambda zip (required for Terraform source_code_hash)
-        run: |
-          pip install -r backend/requirements.txt 2>/dev/null || true
-          python backend/build.py
-
-      - name: Terraform init
-        working-directory: infra/envs/dev
-        run: |
-          terraform init \
-            -backend-config="bucket=${TF_STATE_BUCKET}" \
-            -backend-config="key=envs/dev/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
-            -backend-config="encrypt=true"
-
-      - name: Terraform plan
-        working-directory: infra/envs/dev
-        run: terraform plan -no-color -input=false
-        env:
-          TF_VAR_cognito_domain_suffix: ${{ vars.COGNITO_DOMAIN_SUFFIX }}

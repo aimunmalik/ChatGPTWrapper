@@ -27,7 +27,15 @@ class JsonFormatter(logging.Formatter):
         }
 
         if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+            # Never emit the traceback text: library exceptions (e.g. openpyxl
+            # on a bad cell, python-docx on a malformed paragraph) often embed
+            # user-supplied content in their message, and the traceback frames
+            # can surface local variables that hold PHI. Record only the
+            # exception class name so ops can see WHAT failed, not WHY.
+            exc_type = record.exc_info[0]
+            payload["exception"] = {
+                "type": exc_type.__name__ if exc_type else "Exception"
+            }
 
         for key, value in record.__dict__.items():
             if key in PHI_FIELDS:

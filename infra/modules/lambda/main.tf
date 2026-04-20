@@ -62,12 +62,15 @@ data "aws_iam_policy_document" "inline" {
   dynamic "statement" {
     for_each = length(var.kms_key_arns) > 0 ? [1] : []
     content {
+      # S3/DDB server-side encryption flows use GenerateDataKey on the CMK
+      # and Decrypt on retrieval; direct Encrypt/ReEncrypt aren't needed.
+      # Keeping the action set minimal reduces the blast radius if the
+      # function role is ever compromised.
       sid    = "KmsAccess"
       effect = "Allow"
       actions = [
         "kms:Decrypt",
-        "kms:Encrypt",
-        "kms:GenerateDataKey",
+        "kms:GenerateDataKey*",
         "kms:DescribeKey",
       ]
       resources = var.kms_key_arns

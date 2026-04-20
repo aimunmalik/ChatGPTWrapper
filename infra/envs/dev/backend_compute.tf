@@ -134,6 +134,11 @@ module "attachments" {
   extract_lambda_arn   = module.lambda_extract.function_arn
   deletion_protection  = var.env == "prod"
 
+  # Empty → let the module create the account-level GuardDuty detector. If a
+  # detector is already enabled in this region (e.g. via AWS Organizations
+  # delegated admin), set this to its ID to skip creation.
+  guardduty_detector_id = ""
+
   tags = local.tags
 }
 

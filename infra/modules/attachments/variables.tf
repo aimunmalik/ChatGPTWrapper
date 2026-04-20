@@ -30,6 +30,18 @@ variable "deletion_protection" {
   default     = true
 }
 
+variable "guardduty_detector_id" {
+  description = <<-EOT
+    Optional ID of an existing account-level GuardDuty detector. GuardDuty
+    detectors are a per-region singleton, so if the account already has one
+    enabled (common when using AWS Organizations delegated admin), pass its
+    ID here and this module will skip creating a new one. Leave empty to
+    let the module create and manage a detector.
+  EOT
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags applied to all resources created by this module."
   type        = map(string)

@@ -69,9 +69,12 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
         try:
             _process_record(record)
             processed += 1
-        except Exception:
+        except Exception as exc:
             failed += 1
-            logger.exception("extract_record_failed")
+            logger.error(
+                "extract_record_failed",
+                extra={"errorType": type(exc).__name__},
+            )
     logger.info(
         "extract_batch_complete",
         extra={"processed": processed, "failed": failed},
@@ -178,17 +181,22 @@ def _process_record(record: dict[str, Any]) -> None:
             },
         )
     except Exception as exc:  # pragma: no cover — defensive
+        # Never surface the raw exception message: library errors (openpyxl,
+        # python-docx) frequently quote attacker/user-supplied document
+        # content, which would land in DDB and then on the UI. Emit only the
+        # exception class name.
         repo.update_status(
             user_id=user_id,
             attachment_id=attachment_id,
             status="error",
-            status_message=str(exc)[:300],
+            status_message=f"extraction failed: {type(exc).__name__}",
         )
-        logger.exception(
+        logger.error(
             "extract_failed",
             extra={
                 "userId": user_id,
                 "attachmentId": attachment_id,
                 "contentType": att.contentType,
+                "errorType": type(exc).__name__,
             },
         )

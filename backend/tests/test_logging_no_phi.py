@@ -82,3 +82,22 @@ def test_content_field_on_record_never_appears():
     formatted = JsonFormatter().format(record)
     assert "Jane Roe" not in formatted
     assert "patient" not in formatted
+
+
+def test_exception_tracebacks_do_not_leak_user_input():
+    """Even when an exception message embeds PHI, log output must not contain it."""
+    buf = io.StringIO()
+    configure_logging()
+    logger = logging.getLogger("anna_chat_test_leak")
+    for handler in logging.getLogger().handlers:
+        handler.stream = buf
+    try:
+        raise ValueError("patient John Doe DOB 01/01/2000 was in session")
+    except ValueError:
+        logger.exception("handler_failed")
+    output = buf.getvalue()
+    assert "John Doe" not in output
+    assert "01/01/2000" not in output
+    assert "patient" not in output
+    # Still logs the type so ops can see what happened
+    assert "ValueError" in output

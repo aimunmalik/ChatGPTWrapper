@@ -121,8 +121,11 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
             extra={"status": exc.status, "reason": exc.message},
         )
         return error(exc.status, exc.message)
-    except Exception:
-        logger.exception("attachments_unhandled_error")
+    except Exception as exc:
+        logger.error(
+            "attachments_unhandled_error",
+            extra={"errorType": type(exc).__name__},
+        )
         return error(500, "internal error")
 
 
@@ -184,17 +187,24 @@ def _presigned_upload(event: dict[str, Any], user: Any) -> dict[str, Any]:
         attachment_id=attachment_id,
     )
 
-    # Loosen the size condition from [size, size] to [1, max]. Exact matching
-    # is brittle — multipart/form-data boundaries add bytes, and some browsers
-    # report file.size slightly differently from the bytes actually posted.
-    # The global max_size_bytes cap is still enforced.
+    # Bound the size condition to the caller-declared size ± 10% + 64 KB for
+    # multipart/form-data boundary overhead and minor browser/file-system
+    # discrepancies — but never exceeding the global max. We can't match
+    # [size, size] exactly (boundaries add bytes, some browsers report
+    # file.size slightly differently from the bytes actually posted), and
+    # the previous [1, global_max] allowed any caller to upload the full
+    # 50 MB cap regardless of what size they declared.
+    upper = min(
+        size_bytes + (size_bytes // 10) + 65536,
+        settings.attachments_max_size_bytes,
+    )
     presigned = _s3().generate_presigned_post(
         Bucket=settings.attachments_bucket,
         Key=s3_key,
         Fields={"Content-Type": content_type},
         Conditions=[
             {"Content-Type": content_type},
-            ["content-length-range", 1, settings.attachments_max_size_bytes],
+            ["content-length-range", 1, upper],
             ["starts-with", "$key", f"attachments/{user.sub}/{att.attachmentId}/"],
         ],
         ExpiresIn=PRESIGN_EXPIRY_SECONDS,
@@ -260,14 +270,15 @@ def _delete(user: Any, attachment_id: str) -> dict[str, Any]:
     settings = _settings()
     try:
         _s3().delete_object(Bucket=settings.attachments_bucket, Key=att.s3Key)
-    except Exception:
+    except Exception as exc:
         # Best-effort: log but still remove the DDB row.
-        logger.exception(
+        logger.error(
             "attachment_s3_delete_failed",
             extra={
                 "userId": user.sub,
                 "attachmentId": attachment_id,
                 "sizeBytes": att.sizeBytes,
+                "errorType": type(exc).__name__,
             },
         )
 

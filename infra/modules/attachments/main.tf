@@ -112,7 +112,19 @@ resource "aws_s3_bucket_cors_configuration" "attachments" {
   cors_rule {
     allowed_origins = var.cors_allow_origins
     allowed_methods = ["POST", "PUT"]
-    allowed_headers = ["*"]
+    # Explicit allowlist (was `["*"]`). content-type is the only header the
+    # browser strictly requires for presigned POST; the x-amz-* entries are
+    # there to cover SigV4 POST variants and credential propagation so a
+    # preflight doesn't fail silently. If you ever add a new SDK-generated
+    # header here, add it to this list.
+    allowed_headers = [
+      "content-type",
+      "authorization",
+      "x-amz-date",
+      "x-amz-content-sha256",
+      "x-amz-security-token",
+      "x-amz-user-agent",
+    ]
     expose_headers  = ["ETag"]
     max_age_seconds = 3000
   }
@@ -196,4 +208,80 @@ resource "aws_dynamodb_table" "attachments" {
   deletion_protection_enabled = var.deletion_protection
 
   tags = merge(var.tags, { Name = local.table_name })
+}
+
+# ──────────────────────────────────────────────────────────────────────────
+# GuardDuty Malware Protection for the attachments bucket
+#
+# HIPAA-adjacent buckets that accept untrusted user uploads need malware
+# scanning. GuardDuty's "Malware Protection for S3" plan tags matching
+# objects (GuardDutyMalwareScanStatus) so downstream consumers can gate on
+# NO_THREATS_FOUND before handing files to the extraction Lambda / model.
+#
+# GuardDuty detectors are a per-account-per-region singleton. If the account
+# already has one (common with AWS Organizations delegated admin), pass the
+# ID via var.guardduty_detector_id and this module will use it instead of
+# creating a new one.
+# ──────────────────────────────────────────────────────────────────────────
+
+locals {
+  create_guardduty_detector = var.guardduty_detector_id == ""
+}
+
+resource "aws_guardduty_detector" "this" {
+  count = local.create_guardduty_detector ? 1 : 0
+
+  enable = true
+  # S3 Malware Protection uses the separate `aws_guardduty_malware_protection_plan`
+  # resource below; it is not configured via the detector's `datasources` block.
+
+  tags = var.tags
+}
+
+resource "aws_iam_role" "guardduty_malware_scan" {
+  name_prefix = "anna-chat-${var.env}-gd-malware-"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "malware-protection-plan.guardduty.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "guardduty_malware_scan" {
+  role       = aws_iam_role.guardduty_malware_scan.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonGuardDutyMalwareProtectionServiceRolePolicy"
+}
+
+resource "aws_guardduty_malware_protection_plan" "attachments" {
+  role = aws_iam_role.guardduty_malware_scan.arn
+
+  protected_resource {
+    s3_bucket {
+      bucket_name     = aws_s3_bucket.attachments.id
+      object_prefixes = ["attachments/"]
+    }
+  }
+
+  actions {
+    tagging {
+      status = "ENABLED"
+    }
+  }
+
+  # The detector must exist (whether we created it or one already existed)
+  # before the plan can attach. The plan resource doesn't take a detector_id
+  # input — the association is implicit via the account — but we still want
+  # the Terraform graph to order detector creation first.
+  depends_on = [
+    aws_guardduty_detector.this,
+    aws_iam_role_policy_attachment.guardduty_malware_scan,
+  ]
+
+  tags = var.tags
 }
