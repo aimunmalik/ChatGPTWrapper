@@ -33,6 +33,18 @@ variable "chat_stream_origin_domain" {
   default     = ""
 }
 
+variable "custom_domain_aliases" {
+  description = "CloudFront alternate domain names (e.g. ['praxis.annaautismcare.com']). Empty list keeps the distribution on its default d*.cloudfront.net domain only."
+  type        = list(string)
+  default     = []
+}
+
+variable "custom_domain_cert_arn" {
+  description = "ARN of an ACM certificate (must be in us-east-1) covering the aliases above. Empty string uses the CloudFront default certificate."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags applied to all resources in the module."
   type        = map(string)

@@ -27,6 +27,11 @@ module "edge" {
   rate_limit_per_5min = var.waf_rate_limit
   csp_connect_extra   = local.csp_connect_extra
 
+  # Custom domain — ACM cert is created + validated in domain.tf. Alias
+  # attaches once the cert is ISSUED.
+  custom_domain_aliases  = [local.app_fqdn]
+  custom_domain_cert_arn = aws_acm_certificate_validation.app.certificate_arn
+
   # Streaming path (/api/chat-stream) is disabled. Python Lambda doesn't
   # support native response streaming; to re-enable, pass the function URL
   # domain here and add a lambda_chat_stream module call in backend_compute.tf.

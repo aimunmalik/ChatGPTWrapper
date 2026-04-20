@@ -170,6 +170,7 @@ resource "aws_cloudfront_distribution" "spa" {
   price_class         = var.price_class
   http_version        = "http2and3"
   web_acl_id          = aws_wafv2_web_acl.spa.arn
+  aliases             = var.custom_domain_aliases
 
   origin {
     origin_id                = "spa-s3"
@@ -242,7 +243,9 @@ resource "aws_cloudfront_distribution" "spa" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = var.custom_domain_cert_arn == ""
+    acm_certificate_arn            = var.custom_domain_cert_arn != "" ? var.custom_domain_cert_arn : null
+    ssl_support_method             = var.custom_domain_cert_arn != "" ? "sni-only" : null
     minimum_protocol_version       = "TLSv1.2_2021"
   }
 

@@ -50,3 +50,15 @@ output "acm_validation_records" {
     }
   ]
 }
+
+# Waits for ACM to see the validation CNAME (which the user added in
+# Squarespace DNS). Default timeout is 45 min; DNS is already propagated, so
+# this should return in 1-2 min.
+resource "aws_acm_certificate_validation" "app" {
+  certificate_arn = aws_acm_certificate.app.arn
+}
+
+output "acm_cert_arn" {
+  description = "ARN of the validated app certificate. Consumed by the CloudFront distribution."
+  value       = aws_acm_certificate_validation.app.certificate_arn
+}

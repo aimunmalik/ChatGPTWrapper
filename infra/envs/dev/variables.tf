@@ -34,11 +34,12 @@ variable "cognito_domain_suffix" {
 }
 
 variable "cognito_callback_urls" {
-  description = "OAuth callback URLs for the SPA. Defaults cover local dev + the CloudFront domain."
+  description = "OAuth callback URLs for the SPA. Defaults cover local dev, CloudFront default domain, and the praxis.annaautismcare.com custom domain."
   type        = list(string)
   default = [
     "http://localhost:5173/callback",
     "https://dr8xfgmss2sy0.cloudfront.net/callback",
+    "https://praxis.annaautismcare.com/callback",
   ]
 }
 
@@ -48,15 +49,17 @@ variable "cognito_logout_urls" {
   default = [
     "http://localhost:5173",
     "https://dr8xfgmss2sy0.cloudfront.net",
+    "https://praxis.annaautismcare.com",
   ]
 }
 
 variable "cors_allow_origins" {
-  description = "Origins allowed by API Gateway CORS. Includes local dev + the CloudFront domain."
+  description = "Origins allowed by API Gateway CORS. Includes local dev, CloudFront default domain, and the praxis.annaautismcare.com custom domain."
   type        = list(string)
   default = [
     "http://localhost:5173",
     "https://dr8xfgmss2sy0.cloudfront.net",
+    "https://praxis.annaautismcare.com",
   ]
 }
 
