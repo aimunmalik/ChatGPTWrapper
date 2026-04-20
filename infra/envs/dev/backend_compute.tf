@@ -164,7 +164,10 @@ module "lambda_attachments" {
     module.attachments.table_arn,
     module.dynamodb.conversations_table_arn,
   ]
-  kms_key_arns   = [module.kms_dynamodb.key_arn]
+  # Needs the DDB CMK (table encryption) AND the S3 CMK (SSE-KMS on the
+  # attachments bucket). S3 uses the caller's credentials — via the
+  # presigned URL, those are this Lambda's — to call kms:GenerateDataKey.
+  kms_key_arns   = [module.kms_dynamodb.key_arn, module.kms_s3.key_arn]
   s3_bucket_arns = [module.attachments.bucket_arn]
 
   tags = local.tags
