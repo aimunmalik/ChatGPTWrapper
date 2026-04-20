@@ -14,6 +14,7 @@ from functools import lru_cache
 from typing import Any
 
 import boto3
+from botocore.config import Config
 
 from anna_chat.attachments_repo import AttachmentsRepo
 from anna_chat.ddb import Repository
@@ -58,7 +59,13 @@ def _attachments_repo() -> AttachmentsRepo:
 @lru_cache(maxsize=1)
 def _s3():
     s = _settings()
-    return boto3.client("s3", region_name=s.aws_region)
+    # SigV4 is required by SSE-KMS-encrypted buckets. boto3 defaults to SigV2
+    # for presigned POSTs in some cases, which S3 rejects with HTTP 400.
+    return boto3.client(
+        "s3",
+        region_name=s.aws_region,
+        config=Config(signature_version="s3v4"),
+    )
 
 
 def _sanitize_filename(filename: str) -> str:
