@@ -1,0 +1,5 @@
+bucket         = "anna-chat-tfstate-743835780802"
+key            = "envs/dev/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "anna-chat-tfstate-lock"
+encrypt        = true

@@ -1,0 +1,21 @@
+# Copy this file to `terraform.tfvars` (gitignored) and fill in values.
+
+aws_region = "us-east-1"
+env        = "dev"
+
+# Must be globally unique within us-east-1. Short and random-ish is fine.
+# Pick whatever you like — it shows up in the hosted-UI URL but doesn't need
+# to be memorable. Example: "anna42", "chatdev-k7q", etc.
+cognito_domain_suffix = "REPLACE_ME"
+
+# For local development. Update to add the CloudFront URL once the SPA is deployed.
+cognito_callback_urls = [
+  "http://localhost:5173/callback",
+]
+cognito_logout_urls = [
+  "http://localhost:5173",
+]
+
+# VPC flow logs are expensive; off in dev by default.
+flow_logs_enabled  = false
+log_retention_days = 30
