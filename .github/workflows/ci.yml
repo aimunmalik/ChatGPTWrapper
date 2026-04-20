@@ -71,6 +71,9 @@ jobs:
 
   terraform-plan:
     name: Terraform — plan dev
+    # Only on PRs. On main pushes, deploy-dev.yml runs apply which would
+    # race this job for the state lock.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
