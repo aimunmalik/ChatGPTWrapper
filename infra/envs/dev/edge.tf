@@ -5,6 +5,9 @@ locals {
     "https://cognito-idp.${var.aws_region}.amazonaws.com",
     "https://${module.cognito.user_pool_domain}.auth.${var.aws_region}.amazoncognito.com",
     "https://*.execute-api.${var.aws_region}.amazonaws.com",
+    # Attachments bucket uploads (presigned POST from browser → S3)
+    "https://*.s3.amazonaws.com",
+    "https://*.s3.${var.aws_region}.amazonaws.com",
   ])
 }
 
