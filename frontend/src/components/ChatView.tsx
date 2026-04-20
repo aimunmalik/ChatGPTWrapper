@@ -39,6 +39,7 @@ export function ChatView({
   );
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const activeConvRef = useRef<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     window.localStorage.setItem(MODEL_STORAGE_KEY, model);
@@ -52,6 +53,29 @@ export function ChatView({
     };
     window.addEventListener("praxis:model-changed", handler);
     return () => window.removeEventListener("praxis:model-changed", handler);
+  }, []);
+
+  // Listen for prompt template insertions from the command palette.
+  useEffect(() => {
+    const handler = (evt: Event) => {
+      const detail = (evt as CustomEvent<{ text?: string }>).detail;
+      const text = detail?.text;
+      if (!text) return;
+      setInput(text);
+      queueMicrotask(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        const firstBracket = text.indexOf("[");
+        if (firstBracket !== -1) {
+          el.setSelectionRange(firstBracket, firstBracket);
+        } else {
+          el.setSelectionRange(el.value.length, el.value.length);
+        }
+      });
+    };
+    window.addEventListener("praxis:insert-prompt", handler);
+    return () => window.removeEventListener("praxis:insert-prompt", handler);
   }, []);
 
   useEffect(() => {
@@ -153,6 +177,7 @@ export function ChatView({
 
       <form className="chat__composer" onSubmit={handleSubmit}>
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Message Praxis…"

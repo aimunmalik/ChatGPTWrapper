@@ -13,6 +13,7 @@ import {
   listConversations,
 } from "../api/conversations";
 import { buildLogoutUrl } from "../auth/oidcConfig";
+import { PROMPT_TEMPLATES } from "../prompts";
 import { useTheme } from "../theme/ThemeContext";
 
 const MODEL_STORAGE_KEY = "anna-chat:model";
@@ -158,6 +159,20 @@ export function ChatPage() {
       },
     }));
 
+    const prompts: Command[] = PROMPT_TEMPLATES.map((p) => ({
+      id: `prompt-${p.id}`,
+      label: p.label,
+      group: "Quick prompts",
+      hint: p.hint,
+      keywords: p.hint,
+      onRun: () => {
+        handleNewChat();
+        window.dispatchEvent(
+          new CustomEvent("praxis:insert-prompt", { detail: { text: p.template } }),
+        );
+      },
+    }));
+
     const conversationCmds: Command[] = conversations.slice(0, 20).map((c) => ({
       id: `conv-${c.conversationId}`,
       label: c.title,
@@ -165,7 +180,7 @@ export function ChatPage() {
       onRun: () => setActiveId(c.conversationId),
     }));
 
-    return [...actions, ...models, ...conversationCmds];
+    return [...actions, ...prompts, ...models, ...conversationCmds];
   }, [conversations, handleNewChat, handleSignOut, theme]);
 
   return (
