@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Praxis favicon: bold pink P on transparent background.
+       Renders crisp at any size; adapts to browser light/dark mode by
+       staying the brand hot-pink regardless. -->
+  <text
+    x="50%"
+    y="54%"
+    text-anchor="middle"
+    dominant-baseline="central"
+    font-family="'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+    font-weight="900"
+    font-size="30"
+    fill="#FF7896">P</text>
+</svg>
