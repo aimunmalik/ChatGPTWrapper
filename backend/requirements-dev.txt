@@ -1,3 +1,6 @@
+# Dev + CI deps. Includes runtime deps so tests can import the same libs Lambda does.
+-r requirements.txt
+
 pytest==8.3.4
 pytest-mock==3.14.0
 boto3==1.35.90
