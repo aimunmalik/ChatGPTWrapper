@@ -253,9 +253,58 @@ resource "aws_iam_role" "guardduty_malware_scan" {
   tags = var.tags
 }
 
-resource "aws_iam_role_policy_attachment" "guardduty_malware_scan" {
-  role       = aws_iam_role.guardduty_malware_scan.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonGuardDutyMalwareProtectionServiceRolePolicy"
+# AWS doesn't publish a managed policy for GuardDuty Malware Protection
+# plans (the name we originally tried, AmazonGuardDutyMalwareProtection
+# ServiceRolePolicy, doesn't exist as attachable). The permissions below
+# match the AWS docs for the scan role.
+resource "aws_iam_role_policy" "guardduty_malware_scan" {
+  name = "scan"
+  role = aws_iam_role.guardduty_malware_scan.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3ObjectRead"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectTagging",
+          "s3:GetObjectVersion",
+          "s3:GetObjectVersionTagging",
+          "s3:ListBucket",
+        ]
+        Resource = [
+          aws_s3_bucket.attachments.arn,
+          "${aws_s3_bucket.attachments.arn}/*",
+        ]
+      },
+      {
+        Sid    = "S3TagWrites"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObjectTagging",
+          "s3:PutObjectVersionTagging",
+        ]
+        Resource = "${aws_s3_bucket.attachments.arn}/*"
+      },
+      {
+        Sid      = "KmsUseBucketKey"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = var.kms_key_arn
+      },
+      {
+        Sid    = "EventBridgeTarget"
+        Effect = "Allow"
+        Action = [
+          "events:DescribeRule",
+          "events:ListTargetsByRule",
+        ]
+        Resource = "arn:aws:events:*:*:rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtection*"
+      },
+    ]
+  })
 }
 
 resource "aws_guardduty_malware_protection_plan" "attachments" {
@@ -280,7 +329,7 @@ resource "aws_guardduty_malware_protection_plan" "attachments" {
   # the Terraform graph to order detector creation first.
   depends_on = [
     aws_guardduty_detector.this,
-    aws_iam_role_policy_attachment.guardduty_malware_scan,
+    aws_iam_role_policy.guardduty_malware_scan,
   ]
 
   tags = var.tags
