@@ -34,21 +34,30 @@ variable "cognito_domain_suffix" {
 }
 
 variable "cognito_callback_urls" {
-  description = "OAuth callback URLs for the SPA. In dev, typically http://localhost:5173/callback. Add the CloudFront URL once deployed."
+  description = "OAuth callback URLs for the SPA. Defaults cover local dev + the CloudFront domain."
   type        = list(string)
-  default     = ["http://localhost:5173/callback"]
+  default = [
+    "http://localhost:5173/callback",
+    "https://dr8xfgmss2sy0.cloudfront.net/callback",
+  ]
 }
 
 variable "cognito_logout_urls" {
   description = "Sign-out redirect URLs for the SPA."
   type        = list(string)
-  default     = ["http://localhost:5173"]
+  default = [
+    "http://localhost:5173",
+    "https://dr8xfgmss2sy0.cloudfront.net",
+  ]
 }
 
 variable "cors_allow_origins" {
-  description = "Origins allowed by API Gateway CORS. Include local dev and any deployed frontend URL."
+  description = "Origins allowed by API Gateway CORS. Includes local dev + the CloudFront domain."
   type        = list(string)
-  default     = ["http://localhost:5173"]
+  default = [
+    "http://localhost:5173",
+    "https://dr8xfgmss2sy0.cloudfront.net",
+  ]
 }
 
 variable "bedrock_model_id" {
