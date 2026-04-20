@@ -62,3 +62,27 @@ variable "message_ttl_days" {
   type        = number
   default     = 90
 }
+
+variable "cloudfront_price_class" {
+  description = "CloudFront price class. PriceClass_100 (US/EU) is cheapest."
+  type        = string
+  default     = "PriceClass_100"
+}
+
+variable "waf_rate_limit" {
+  description = "WAF rate limit per IP per 5-minute window."
+  type        = number
+  default     = 2000
+}
+
+variable "github_org" {
+  description = "GitHub org/owner for the OIDC trust policy."
+  type        = string
+  default     = "aimunmalik"
+}
+
+variable "github_repo" {
+  description = "GitHub repo name for the OIDC trust policy."
+  type        = string
+  default     = "ChatGPTWrapper"
+}

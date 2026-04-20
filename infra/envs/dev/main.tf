@@ -53,11 +53,17 @@ module "network" {
 }
 
 module "cognito" {
-  source                 = "../../modules/cognito"
-  env                    = var.env
-  domain_suffix          = var.cognito_domain_suffix
-  callback_urls          = var.cognito_callback_urls
-  logout_urls            = var.cognito_logout_urls
+  source        = "../../modules/cognito"
+  env           = var.env
+  domain_suffix = var.cognito_domain_suffix
+  callback_urls = concat(
+    var.cognito_callback_urls,
+    ["${module.edge.cloudfront_url}/callback"],
+  )
+  logout_urls = concat(
+    var.cognito_logout_urls,
+    [module.edge.cloudfront_url],
+  )
   deletion_protection    = var.env == "prod"
   advanced_security_mode = var.env == "prod" ? "ENFORCED" : "AUDIT"
   tags                   = local.tags

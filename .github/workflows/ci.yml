@@ -1,0 +1,110 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  TF_LOCK_TABLE: ${{ vars.TF_LOCK_TABLE }}
+
+jobs:
+  backend-test:
+    name: Backend — pytest + ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install deps
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Lint
+        run: ruff check backend/src backend/tests
+
+      - name: Test
+        run: pytest -q backend
+
+  frontend-build:
+    name: Frontend — tsc + vite build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build
+        run: npm run build
+        working-directory: frontend
+        env:
+          # Build-time values can be placeholders for the type-check pass; the real
+          # values get injected when the deploy job rebuilds with production vars.
+          VITE_AWS_REGION: ${{ vars.AWS_REGION }}
+          VITE_COGNITO_USER_POOL_ID: ${{ vars.COGNITO_USER_POOL_ID }}
+          VITE_COGNITO_CLIENT_ID: ${{ vars.COGNITO_SPA_CLIENT_ID }}
+          VITE_COGNITO_DOMAIN: ${{ vars.COGNITO_DOMAIN }}
+          VITE_API_ENDPOINT: ${{ vars.API_ENDPOINT }}
+
+  terraform-plan:
+    name: Terraform — plan dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.8"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build Lambda zip (required for Terraform source_code_hash)
+        run: |
+          pip install -r backend/requirements.txt 2>/dev/null || true
+          python backend/build.py
+
+      - name: Terraform init
+        working-directory: infra/envs/dev
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=envs/dev/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform plan
+        working-directory: infra/envs/dev
+        run: terraform plan -no-color -input=false
+        env:
+          TF_VAR_cognito_domain_suffix: ${{ vars.COGNITO_DOMAIN_SUFFIX }}

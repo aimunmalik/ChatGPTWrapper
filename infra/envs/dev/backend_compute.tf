@@ -82,7 +82,7 @@ module "api" {
   cognito_user_pool_id  = module.cognito.user_pool_id
   cognito_spa_client_id = module.cognito.spa_client_id
 
-  cors_allow_origins = var.cors_allow_origins
+  cors_allow_origins = concat(var.cors_allow_origins, [module.edge.cloudfront_url])
 
   log_retention_days = var.log_retention_days
   logs_kms_key_arn   = module.kms_logs.key_arn

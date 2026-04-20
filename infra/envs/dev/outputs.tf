@@ -75,3 +75,23 @@ output "lambda_functions" {
     conversations = module.lambda_conversations.function_name
   }
 }
+
+output "cloudfront_url" {
+  description = "Public URL for the deployed SPA."
+  value       = module.edge.cloudfront_url
+}
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID (used for cache invalidations)."
+  value       = module.edge.cloudfront_distribution_id
+}
+
+output "spa_bucket_name" {
+  description = "S3 bucket holding the built SPA assets."
+  value       = module.edge.spa_bucket_name
+}
+
+output "github_actions_role_arn" {
+  description = "IAM role ARN assumed by GitHub Actions via OIDC. Set this as the AWS_ROLE_ARN GitHub repo variable."
+  value       = aws_iam_role.github_actions.arn
+}

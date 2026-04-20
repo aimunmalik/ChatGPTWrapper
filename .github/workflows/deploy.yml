@@ -1,0 +1,139 @@
+name: deploy-dev
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  TF_LOCK_TABLE: ${{ vars.TF_LOCK_TABLE }}
+
+jobs:
+  deploy:
+    name: Build + terraform apply + SPA deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.8"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # ── Backend ──────────────────────────────────────────────
+      - name: Build Lambda zip
+        run: |
+          pip install -r backend/requirements.txt 2>/dev/null || true
+          python backend/build.py
+
+      - name: Terraform init
+        working-directory: infra/envs/dev
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=envs/dev/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform apply
+        working-directory: infra/envs/dev
+        run: terraform apply -auto-approve -input=false
+        env:
+          TF_VAR_cognito_domain_suffix: ${{ vars.COGNITO_DOMAIN_SUFFIX }}
+
+      - name: Export terraform outputs
+        id: tf
+        working-directory: infra/envs/dev
+        run: |
+          echo "spa_bucket=$(terraform output -raw spa_bucket_name)" >> "$GITHUB_OUTPUT"
+          echo "distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
+          echo "cloudfront_url=$(terraform output -raw cloudfront_url)" >> "$GITHUB_OUTPUT"
+          echo "api_endpoint=$(terraform output -raw api_endpoint)" >> "$GITHUB_OUTPUT"
+          echo "cognito_user_pool_id=$(terraform output -raw cognito_user_pool_id)" >> "$GITHUB_OUTPUT"
+          echo "cognito_spa_client_id=$(terraform output -raw cognito_spa_client_id)" >> "$GITHUB_OUTPUT"
+
+      # ── Frontend ─────────────────────────────────────────────
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+        env:
+          VITE_AWS_REGION: ${{ env.AWS_REGION }}
+          VITE_COGNITO_USER_POOL_ID: ${{ steps.tf.outputs.cognito_user_pool_id }}
+          VITE_COGNITO_CLIENT_ID: ${{ steps.tf.outputs.cognito_spa_client_id }}
+          VITE_COGNITO_DOMAIN: ${{ vars.COGNITO_DOMAIN }}
+          VITE_API_ENDPOINT: ${{ steps.tf.outputs.api_endpoint }}
+
+      - name: Upload hashed assets (long cache)
+        working-directory: frontend
+        run: |
+          aws s3 sync dist/assets "s3://${SPA_BUCKET}/assets/" \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable"
+        env:
+          SPA_BUCKET: ${{ steps.tf.outputs.spa_bucket }}
+
+      - name: Upload root files (no-cache)
+        working-directory: frontend
+        run: |
+          for f in dist/*; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            case "$name" in
+              *.html) ct="text/html; charset=utf-8" ;;
+              *.png)  ct="image/png" ;;
+              *.svg)  ct="image/svg+xml" ;;
+              *.ico)  ct="image/x-icon" ;;
+              *)      ct="application/octet-stream" ;;
+            esac
+            aws s3 cp "$f" "s3://${SPA_BUCKET}/${name}" \
+              --cache-control "no-cache, must-revalidate" \
+              --content-type "$ct"
+          done
+        env:
+          SPA_BUCKET: ${{ steps.tf.outputs.spa_bucket }}
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${DISTRIBUTION_ID}" \
+            --paths "/*"
+        env:
+          DISTRIBUTION_ID: ${{ steps.tf.outputs.distribution_id }}
+
+      - name: Summary
+        run: |
+          {
+            echo "## Deploy complete"
+            echo ""
+            echo "- SPA:  ${{ steps.tf.outputs.cloudfront_url }}"
+            echo "- API:  ${{ steps.tf.outputs.api_endpoint }}"
+          } >> "$GITHUB_STEP_SUMMARY"
