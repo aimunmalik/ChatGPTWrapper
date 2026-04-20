@@ -224,113 +224,19 @@ resource "aws_dynamodb_table" "attachments" {
 # creating a new one.
 # ──────────────────────────────────────────────────────────────────────────
 
-locals {
-  create_guardduty_detector = var.guardduty_detector_id == ""
-}
-
-resource "aws_guardduty_detector" "this" {
-  count = local.create_guardduty_detector ? 1 : 0
-
-  enable = true
-  # S3 Malware Protection uses the separate `aws_guardduty_malware_protection_plan`
-  # resource below; it is not configured via the detector's `datasources` block.
-
-  tags = var.tags
-}
-
-resource "aws_iam_role" "guardduty_malware_scan" {
-  name_prefix = "anna-chat-${var.env}-gd-malware-"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "malware-protection-plan.guardduty.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-
-  tags = var.tags
-}
-
-# AWS doesn't publish a managed policy for GuardDuty Malware Protection
-# plans (the name we originally tried, AmazonGuardDutyMalwareProtection
-# ServiceRolePolicy, doesn't exist as attachable). The permissions below
-# match the AWS docs for the scan role.
-resource "aws_iam_role_policy" "guardduty_malware_scan" {
-  name = "scan"
-  role = aws_iam_role.guardduty_malware_scan.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "S3ObjectRead"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:GetObjectTagging",
-          "s3:GetObjectVersion",
-          "s3:GetObjectVersionTagging",
-          "s3:ListBucket",
-        ]
-        Resource = [
-          aws_s3_bucket.attachments.arn,
-          "${aws_s3_bucket.attachments.arn}/*",
-        ]
-      },
-      {
-        Sid    = "S3TagWrites"
-        Effect = "Allow"
-        Action = [
-          "s3:PutObjectTagging",
-          "s3:PutObjectVersionTagging",
-        ]
-        Resource = "${aws_s3_bucket.attachments.arn}/*"
-      },
-      {
-        Sid      = "KmsUseBucketKey"
-        Effect   = "Allow"
-        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
-        Resource = var.kms_key_arn
-      },
-      {
-        Sid    = "EventBridgeTarget"
-        Effect = "Allow"
-        Action = [
-          "events:DescribeRule",
-          "events:ListTargetsByRule",
-        ]
-        Resource = "arn:aws:events:*:*:rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtection*"
-      },
-    ]
-  })
-}
-
-resource "aws_guardduty_malware_protection_plan" "attachments" {
-  role = aws_iam_role.guardduty_malware_scan.arn
-
-  protected_resource {
-    s3_bucket {
-      bucket_name     = aws_s3_bucket.attachments.id
-      object_prefixes = ["attachments/"]
-    }
-  }
-
-  actions {
-    tagging {
-      status = "ENABLED"
-    }
-  }
-
-  # The detector must exist (whether we created it or one already existed)
-  # before the plan can attach. The plan resource doesn't take a detector_id
-  # input — the association is implicit via the account — but we still want
-  # the Terraform graph to order detector creation first.
-  depends_on = [
-    aws_guardduty_detector.this,
-    aws_iam_role_policy.guardduty_malware_scan,
-  ]
-
-  tags = var.tags
-}
+# GuardDuty Malware Protection for S3 was intentionally removed 2026-04-20
+# because onboarding the scan role kept bumping into undocumented AWS
+# permission requirements (managed policy doesn't exist, then S3
+# notification perms, then EventBridge rule management, etc.). Every
+# deploy was failing at this step and blocking everything else.
+#
+# Plan to re-enable as a dedicated task:
+#   1. Create the malware-protection plan manually via AWS Console
+#   2. Have the Console auto-generate the correct IAM role + permissions
+#   3. Import both into Terraform
+#
+# Filed as Medium finding in the Phase 6c security audit; not a blocker
+# for dev usage since the attachment flow already requires Cognito auth
+# and files are scanned by the extraction Lambda before being shown to
+# the model — malware scanning here is defense-in-depth, not the only
+# control.
