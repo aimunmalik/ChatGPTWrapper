@@ -59,7 +59,11 @@ module "cognito" {
   callback_urls          = var.cognito_callback_urls
   logout_urls            = var.cognito_logout_urls
   deletion_protection    = var.env == "prod"
-  advanced_security_mode = var.env == "prod" ? "ENFORCED" : "AUDIT"
+  # Tier B — flip dev from AUDIT (observe-only) to ENFORCED so impossible-
+  # travel, credential-stuffing, and compromised-password detections actually
+  # BLOCK risky sign-ins rather than just logging them. Extra ~$0.05/MAU +
+  # $0.005/event — negligible for internal use.
+  advanced_security_mode = "ENFORCED"
   tags                   = local.tags
 }
 
