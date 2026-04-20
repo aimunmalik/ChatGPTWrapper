@@ -177,13 +177,17 @@ def _presigned_upload(event: dict[str, Any], user: Any) -> dict[str, Any]:
         attachment_id=attachment_id,
     )
 
+    # Loosen the size condition from [size, size] to [1, max]. Exact matching
+    # is brittle — multipart/form-data boundaries add bytes, and some browsers
+    # report file.size slightly differently from the bytes actually posted.
+    # The global max_size_bytes cap is still enforced.
     presigned = _s3().generate_presigned_post(
         Bucket=settings.attachments_bucket,
         Key=s3_key,
         Fields={"Content-Type": content_type},
         Conditions=[
             {"Content-Type": content_type},
-            ["content-length-range", size_bytes, size_bytes],
+            ["content-length-range", 1, settings.attachments_max_size_bytes],
             ["starts-with", "$key", f"attachments/{user.sub}/{att.attachmentId}/"],
         ],
         ExpiresIn=PRESIGN_EXPIRY_SECONDS,
