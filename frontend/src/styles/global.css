@@ -515,7 +515,32 @@ h1, h2, h3, h4, h5 {
   border-color: var(--c-primary);
   box-shadow: 0 0 0 3px var(--c-primary-soft);
 }
-.chat__composer .btn { align-self: flex-end; padding: 12px 20px; }
+.chat__composer .btn--primary { align-self: flex-end; padding: 12px 20px; }
+
+/* Paperclip attach button — give it clear visual weight so it doesn't
+   disappear against the dark composer background. */
+.chat__composer-picker {
+  align-self: flex-end;
+  padding-bottom: 2px;
+}
+.chat__composer-picker .btn--icon {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--c-border-strong);
+  background: var(--c-surface-soft);
+  color: var(--c-primary);
+  border-radius: var(--radius);
+}
+.chat__composer-picker .btn--icon:hover:not(:disabled) {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary);
+  color: var(--c-primary-hover);
+}
+.chat__composer-picker .btn--icon:disabled {
+  color: var(--c-text-subtle);
+  opacity: 0.6;
+}
 
 /* ─────────────────────────────────────────────────────────────────────────
    Message bubbles
