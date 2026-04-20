@@ -16,13 +16,17 @@ export interface Attachment {
 
 export interface PresignedUpload {
   attachmentId: string;
+  conversationId: string;
+  conversationCreated: boolean;
+  conversationTitle: string;
   uploadUrl: string;
   uploadFields: Record<string, string>;
   expiresAt: number;
 }
 
 export interface PresignedUploadRequest {
-  conversationId: string;
+  /** Empty string or omitted → backend auto-creates a new conversation. */
+  conversationId?: string;
   filename: string;
   contentType: string;
   sizeBytes: number;

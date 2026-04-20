@@ -126,8 +126,6 @@ def _presigned_upload(event: dict[str, Any], user: Any) -> dict[str, Any]:
     content_type = (body.get("contentType") or "").strip()
     size_bytes = body.get("sizeBytes")
 
-    if not conversation_id:
-        raise HttpError(400, "conversationId is required")
     if not filename:
         raise HttpError(400, "filename is required")
     if content_type not in ALLOWED_CONTENT_TYPES:
@@ -142,12 +140,24 @@ def _presigned_upload(event: dict[str, Any], user: Any) -> dict[str, Any]:
             f"file exceeds max size of {settings.attachments_max_size_bytes} bytes",
         )
 
-    # Ownership check on the conversation the attachment belongs to.
-    conv = _repo().get_conversation(
-        user_id=user.sub, conversation_id=conversation_id
-    )
-    if not conv:
-        raise HttpError(404, "conversation not found")
+    # If no conversation exists yet, auto-create one using the filename as
+    # the seed title. The frontend then uses the returned conversationId as
+    # the active conversation — attachments work before any chat message.
+    conversation_created = False
+    if conversation_id:
+        conv = _repo().get_conversation(
+            user_id=user.sub, conversation_id=conversation_id
+        )
+        if not conv:
+            raise HttpError(404, "conversation not found")
+    else:
+        conv = _repo().create_conversation(
+            user_id=user.sub,
+            title=filename[:120],
+            model=settings.bedrock_model_id,
+        )
+        conversation_id = conv.conversationId
+        conversation_created = True
 
     sanitized = _sanitize_filename(filename)
     repo = _attachments_repo()
@@ -195,6 +205,9 @@ def _presigned_upload(event: dict[str, Any], user: Any) -> dict[str, Any]:
     return ok(
         {
             "attachmentId": att.attachmentId,
+            "conversationId": conversation_id,
+            "conversationCreated": conversation_created,
+            "conversationTitle": conv.title,
             "uploadUrl": presigned["url"],
             "uploadFields": presigned["fields"],
             "expiresAt": expires_at_ms,

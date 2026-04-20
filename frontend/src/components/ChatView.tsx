@@ -48,7 +48,11 @@ export function ChatView({
     attachments,
     uploadFiles,
     removeAttachment,
-  } = useAttachmentUpload({ accessToken, conversationId });
+  } = useAttachmentUpload({
+    accessToken,
+    conversationId,
+    onConversationCreated,
+  });
 
   useEffect(() => {
     window.localStorage.setItem(MODEL_STORAGE_KEY, model);
@@ -200,17 +204,10 @@ export function ChatView({
         className="chat__composer chat__composer--with-picker"
         onSubmit={handleSubmit}
       >
-        <div
-          className="chat__composer-picker"
-          title={
-            !conversationId
-              ? "Send a first message to start attaching files"
-              : undefined
-          }
-        >
+        <div className="chat__composer-picker" title="Attach files">
           <AttachmentPicker
             onFiles={(files) => void uploadFiles(files)}
-            disabled={sending || !conversationId}
+            disabled={sending}
           />
         </div>
         <textarea

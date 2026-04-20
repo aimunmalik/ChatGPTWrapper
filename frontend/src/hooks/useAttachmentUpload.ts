@@ -11,6 +11,10 @@ import type { Attachment } from "../api/attachments";
 interface Options {
   accessToken: string;
   conversationId: string | null;
+  /** Called when the backend auto-creates a conversation during upload
+   *  (i.e. user attached a file before sending any message). Parent should
+   *  promote this to the active conversationId. */
+  onConversationCreated?: (conversationId: string, title: string) => void;
 }
 
 interface UseAttachmentUpload {
@@ -30,6 +34,7 @@ function isSettling(status: Attachment["status"]): boolean {
 export function useAttachmentUpload({
   accessToken,
   conversationId,
+  onConversationCreated,
 }: Options): UseAttachmentUpload {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -110,58 +115,64 @@ export function useAttachmentUpload({
   const uploadFiles = useCallback(
     async (files: File[]) => {
       const token = tokenRef.current;
-      const convId = convRef.current;
-      if (!token || !convId || files.length === 0) return;
+      if (!token || files.length === 0) return;
+      // conversationId may be null here — backend auto-creates on first upload.
 
-      // For each file: presign → optimistic chip → S3 upload → refresh.
-      await Promise.all(
-        files.map(async (file) => {
-          const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          const optimistic: Attachment = {
-            attachmentId: localId,
+      // Serialize the files so conversation auto-creation happens exactly once:
+      // the first presign creates the conversation, subsequent files attach to
+      // the same one.
+      for (const file of files) {
+        const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const optimistic: Attachment = {
+          attachmentId: localId,
+          filename: file.name,
+          contentType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          status: "uploading",
+          statusMessage: null,
+          createdAt: Date.now(),
+        };
+        setAttachments((prev) => [...prev, optimistic]);
+
+        try {
+          const presigned = await getPresignedUpload(token, {
+            conversationId: convRef.current ?? undefined,
             filename: file.name,
             contentType: file.type || "application/octet-stream",
             sizeBytes: file.size,
-            status: "uploading",
-            statusMessage: null,
-            createdAt: Date.now(),
-          };
-          setAttachments((prev) => [...prev, optimistic]);
+          });
 
-          try {
-            const presigned = await getPresignedUpload(token, {
-              conversationId: convId,
-              filename: file.name,
-              contentType: file.type || "application/octet-stream",
-              sizeBytes: file.size,
-            });
-            await uploadToS3(presigned.uploadUrl, presigned.uploadFields, file);
-            // Swap our optimistic id for the real attachmentId so the next
-            // refresh() cleanly takes over.
-            setAttachments((prev) =>
-              prev.map((a) =>
-                a.attachmentId === localId
-                  ? { ...a, attachmentId: presigned.attachmentId }
-                  : a,
-              ),
-            );
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : "Upload failed";
-            setAttachments((prev) =>
-              prev.map((a) =>
-                a.attachmentId === localId
-                  ? { ...a, status: "error", statusMessage: msg }
-                  : a,
-              ),
-            );
+          // Promote a newly-created conversation to the active one so the
+          // parent's conversationId state matches what the backend used.
+          if (presigned.conversationCreated && !convRef.current) {
+            convRef.current = presigned.conversationId;
+            onConversationCreated?.(presigned.conversationId, presigned.conversationTitle);
           }
-        }),
-      );
+
+          await uploadToS3(presigned.uploadUrl, presigned.uploadFields, file);
+          setAttachments((prev) =>
+            prev.map((a) =>
+              a.attachmentId === localId
+                ? { ...a, attachmentId: presigned.attachmentId }
+                : a,
+            ),
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Upload failed";
+          setAttachments((prev) =>
+            prev.map((a) =>
+              a.attachmentId === localId
+                ? { ...a, status: "error", statusMessage: msg }
+                : a,
+            ),
+          );
+        }
+      }
 
       // Pick up real server state (extraction status etc.)
       await refresh();
     },
-    [refresh],
+    [refresh, onConversationCreated],
   );
 
   const removeAttachment = useCallback(
