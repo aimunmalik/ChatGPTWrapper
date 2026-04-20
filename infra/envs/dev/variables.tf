@@ -44,3 +44,21 @@ variable "cognito_logout_urls" {
   type        = list(string)
   default     = ["http://localhost:5173"]
 }
+
+variable "cors_allow_origins" {
+  description = "Origins allowed by API Gateway CORS. Include local dev and any deployed frontend URL."
+  type        = list(string)
+  default     = ["http://localhost:5173"]
+}
+
+variable "bedrock_model_id" {
+  description = "Bedrock model ID the chat Lambda invokes. Cross-region inference profile IDs are prefixed with 'us.'."
+  type        = string
+  default     = "us.anthropic.claude-sonnet-4-6"
+}
+
+variable "message_ttl_days" {
+  description = "How long to keep messages in DynamoDB before TTL expires them."
+  type        = number
+  default     = 90
+}

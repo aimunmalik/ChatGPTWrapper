@@ -62,3 +62,16 @@ output "dynamodb" {
     messages      = module.dynamodb.messages_table_name
   }
 }
+
+output "api_endpoint" {
+  description = "Base URL of the API Gateway HTTP API. Append /chat, /conversations, etc."
+  value       = module.api.api_endpoint
+}
+
+output "lambda_functions" {
+  description = "Lambda function names."
+  value = {
+    chat          = module.lambda_chat.function_name
+    conversations = module.lambda_conversations.function_name
+  }
+}

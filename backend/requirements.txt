@@ -1,0 +1,3 @@
+# No runtime-only deps beyond what Lambda's Python runtime provides.
+# boto3 is pre-installed in the Lambda runtime.
+# JWT verification is handled by API Gateway's JWT authorizer (see infra/modules/api).

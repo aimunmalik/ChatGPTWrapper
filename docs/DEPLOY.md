@@ -156,7 +156,61 @@ Check Security Hub (if enabled): should see HIPAA conformance pack starting to c
 
 ## Phase 2 — Backend Lambda handlers
 
-*Runbook section added when Phase 2 code lands.*
+Builds and deploys two Lambdas behind a shared API Gateway HTTP API with a Cognito JWT authorizer.
+
+### Phase 2.1 — Build the Lambda zip
+
+```powershell
+cd backend
+python -m pip install --user -r requirements-dev.txt
+python -m pytest -q              # 16 tests should pass
+python build.py                  # produces backend/lambda.zip
+```
+
+The build script cross-compiles for Linux x86_64 (the Lambda target architecture). It works from Windows, macOS, or Linux.
+
+### Phase 2.2 — Deploy
+
+```powershell
+cd ..\infra\envs\dev
+terraform plan -out plan.tfplan
+# Expect ~32 new resources: 2 Lambdas + roles + SGs + log groups,
+# API Gateway + authorizer + stage + 4 routes with integrations and permissions.
+terraform apply plan.tfplan
+```
+
+Record the new outputs:
+
+```powershell
+terraform output
+```
+
+Two matter most:
+- `api_endpoint` — the base URL the frontend will call (e.g. `https://abc123.execute-api.us-east-1.amazonaws.com`)
+- `lambda_functions` — the two function names
+
+### Phase 2.3 — Smoke test
+
+Unauthenticated call should return 401:
+
+```powershell
+curl -X POST https://<api-endpoint>/chat -H "Content-Type: application/json" -d '{}'
+```
+
+For a direct Lambda smoke test that bypasses API Gateway (uses a synthetic event with pre-validated claims), see the `Smoke tests` section of [../backend/README.md](../backend/README.md).
+
+### Phase 2.4 — Troubleshooting
+
+If Lambda invocations time out at 60s:
+- Check CloudWatch log group `/aws/lambda/anna-chat-dev-chat` — the Lambda usually logs what it was doing.
+- Verify the Lambda security group allows **outbound 443 to 0.0.0.0/0**. Gateway VPC endpoints (DynamoDB, S3) accept public IPs on SG rules but route traffic through the endpoint via the route table. An SG that only allows the VPC CIDR blocks gateway-endpoint traffic.
+
+If `AccessDeniedException` on a Bedrock invoke:
+- Confirm Bedrock model access is granted for the model ID configured in Terraform (`var.bedrock_model_id`, default `us.anthropic.claude-sonnet-4-6`).
+- Bedrock console → Model access should show `Access granted` for Claude Sonnet 4.6 in us-east-1.
+
+If CORS errors from the browser in Phase 3:
+- Add your CloudFront domain to `cors_allow_origins` in `terraform.tfvars` and re-apply.
 
 ## Phase 3 — Frontend
 
