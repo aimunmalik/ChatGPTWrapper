@@ -29,6 +29,7 @@ class BedrockClient:
         system: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 1.0,
+        model_id: str | None = None,
     ) -> BedrockResponse:
         body: dict[str, Any] = {
             "anthropic_version": "bedrock-2023-05-31",
@@ -40,7 +41,7 @@ class BedrockClient:
             body["system"] = system
 
         resp = self._client.invoke_model(
-            modelId=self._model_id,
+            modelId=model_id or self._model_id,
             body=json.dumps(body),
             contentType="application/json",
             accept="application/json",

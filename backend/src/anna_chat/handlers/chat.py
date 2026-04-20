@@ -18,6 +18,12 @@ SYSTEM_PROMPT = (
     "benefit from a licensed professional's judgment. Do not fabricate citations."
 )
 
+ALLOWED_MODELS: set[str] = {
+    "us.anthropic.claude-sonnet-4-6",
+    "us.anthropic.claude-opus-4-7",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+}
+
 
 @lru_cache(maxsize=1)
 def _settings() -> Settings:
@@ -53,6 +59,11 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
         if len(user_message) > 20000:
             raise HttpError(400, "message too long")
 
+        requested_model = body.get("model")
+        if requested_model is not None and requested_model not in ALLOWED_MODELS:
+            raise HttpError(400, f"unsupported model: {requested_model}")
+        model_id = requested_model or _settings().bedrock_model_id
+
         repo = _repo()
         bedrock = _bedrock()
 
@@ -64,7 +75,7 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
         else:
             title = user_message[:80]
             conv = repo.create_conversation(
-                user_id=user.sub, title=title, model=bedrock.model_id
+                user_id=user.sub, title=title, model=model_id
             )
 
         history = repo.recent_turns_for_model(conversation_id=conv.conversationId)
@@ -75,10 +86,12 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
             user_id=user.sub,
             role="user",
             content=user_message,
-            model=bedrock.model_id,
+            model=model_id,
         )
 
-        bedrock_resp = bedrock.invoke(messages=history, system=SYSTEM_PROMPT)
+        bedrock_resp = bedrock.invoke(
+            messages=history, system=SYSTEM_PROMPT, model_id=model_id
+        )
 
         assistant_msg = repo.append_message(
             conversation_id=conv.conversationId,
@@ -87,7 +100,7 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
             content=bedrock_resp.text,
             input_tokens=bedrock_resp.input_tokens,
             output_tokens=bedrock_resp.output_tokens,
-            model=bedrock.model_id,
+            model=model_id,
         )
         repo.touch_conversation(user_id=user.sub, conversation_id=conv.conversationId)
 
@@ -100,7 +113,7 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
                 "messageId": assistant_msg.messageId,
                 "inputTokens": bedrock_resp.input_tokens,
                 "outputTokens": bedrock_resp.output_tokens,
-                "model": bedrock.model_id,
+                "model": model_id,
                 "latencyMs": latency_ms,
                 "stopReason": bedrock_resp.stop_reason,
             },
@@ -115,7 +128,7 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
                     "input": bedrock_resp.input_tokens,
                     "output": bedrock_resp.output_tokens,
                 },
-                "model": bedrock.model_id,
+                "model": model_id,
             }
         )
     except HttpError as exc:
