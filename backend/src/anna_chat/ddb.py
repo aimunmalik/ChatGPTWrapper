@@ -1,10 +1,33 @@
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
+from decimal import Decimal
 from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Key
+
+
+def _floats_to_decimal(value: Any) -> Any:
+    """Recursively convert floats → Decimal so boto3's DDB resource can serialize.
+
+    boto3's resource-level serializer rejects raw Python floats with
+    `TypeError("Float types are not supported. Use Decimal types instead.")`.
+    Anywhere user-generated or LLM-generated content can introduce a float
+    (e.g. similarity scores on the assistant message's `sources`), we have
+    to convert before `put_item`.
+
+    Goes through `str()` on the way to Decimal to preserve Titan / Bedrock's
+    exact reported precision and dodge the `Decimal(0.1) == 0.1000...55`
+    binary-float gotcha.
+    """
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {k: _floats_to_decimal(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_floats_to_decimal(v) for v in value]
+    return value
 
 
 @dataclass
@@ -127,7 +150,12 @@ class Repository:
             ttl=int(time.time()) + self._ttl_seconds,
             sources=list(sources) if sources else [],
         )
-        self._messages.put_item(Item=asdict(msg))
+        # Sources carry a float `score` from the KB retriever. If we passed
+        # that straight to DDB, the resource serializer would TypeError on
+        # the first float it saw — same bug that used to break every KB
+        # write before we converted embedding vectors. Sanitize the whole
+        # item once at the boundary.
+        self._messages.put_item(Item=_floats_to_decimal(asdict(msg)))
         return msg
 
     def list_messages(self, *, conversation_id: str, limit: int = 200) -> list[Message]:
