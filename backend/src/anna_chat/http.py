@@ -91,3 +91,12 @@ def authenticate(event: dict[str, Any], settings: Settings) -> AuthenticatedUser
         name=claims.get("name", ""),
         groups=groups,
     )
+
+
+def require_admin(user: AuthenticatedUser) -> None:
+    """Enforce that `user` belongs to the Cognito `admins` group.
+
+    Raises HttpError(403) when the user is authenticated but not an admin.
+    """
+    if "admins" not in user.groups:
+        raise HttpError(403, "admin only")

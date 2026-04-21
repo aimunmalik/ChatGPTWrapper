@@ -16,6 +16,9 @@ class Settings:
     attachments_max_size_bytes: int
     attachments_max_text_bytes: int
     prompts_table: str
+    kb_table: str
+    kb_bucket: str
+    kb_max_size_bytes: int
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -39,4 +42,9 @@ class Settings:
                 os.environ.get("ATTACHMENTS_MAX_TEXT_BYTES", str(500 * 1024))
             ),
             prompts_table=os.environ.get("PROMPTS_TABLE", ""),
+            kb_table=os.environ.get("KB_TABLE", ""),
+            kb_bucket=os.environ.get("KB_BUCKET", ""),
+            kb_max_size_bytes=int(
+                os.environ.get("KB_MAX_SIZE_BYTES", str(100 * 1024 * 1024))
+            ),
         )

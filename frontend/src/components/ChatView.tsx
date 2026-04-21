@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { postChat } from "../api/chat";
+import type { Source } from "../api/chat";
 import type { MessageSummary } from "../api/conversations";
 import { useAttachmentUpload } from "../hooks/useAttachmentUpload";
 import { AttachmentChip } from "./AttachmentChip";
@@ -24,6 +25,7 @@ interface DraftMessage {
   role: "user" | "assistant";
   content: string;
   pending?: boolean;
+  sources?: Source[];
 }
 
 export function ChatView({
@@ -104,6 +106,9 @@ export function ChatView({
       id: m.messageId,
       role: m.role === "assistant" ? "assistant" : "user",
       content: m.content,
+      // Only assistant messages carry sources on the server; the optional
+      // chaining here keeps user/system rows clean of an empty array.
+      sources: m.role === "assistant" ? m.sources : undefined,
     }));
     return base.concat(drafts);
   }, [initialMessages, drafts]);
@@ -139,7 +144,12 @@ export function ChatView({
       setDrafts((prev) =>
         prev.map((d) =>
           d.id === assistantId
-            ? { ...d, content: resp.assistantMessage, pending: false }
+            ? {
+                ...d,
+                content: resp.assistantMessage,
+                pending: false,
+                sources: resp.sources,
+              }
             : d,
         ),
       );
@@ -174,7 +184,13 @@ export function ChatView({
           </div>
         )}
         {displayed.map((m) => (
-          <Message key={m.id} role={m.role} content={m.content} pending={m.pending} />
+          <Message
+            key={m.id}
+            role={m.role}
+            content={m.content}
+            pending={m.pending}
+            sources={m.sources}
+          />
         ))}
         <div ref={bottomRef} />
       </div>

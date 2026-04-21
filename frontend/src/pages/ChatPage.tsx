@@ -4,6 +4,7 @@ import { useAuth } from "react-oidc-context";
 import { ChatView } from "../components/ChatView";
 import type { Command } from "../components/CommandPalette";
 import { CommandPalette } from "../components/CommandPalette";
+import { KnowledgeBase } from "../components/KnowledgeBase";
 import { Layout } from "../components/Layout";
 import { MODEL_OPTIONS } from "../components/ModelPicker";
 import { PromptLibrary } from "../components/PromptLibrary";
@@ -14,6 +15,7 @@ import {
   listConversations,
 } from "../api/conversations";
 import { buildLogoutUrl } from "../auth/oidcConfig";
+import { useIsAdmin } from "../auth/useIsAdmin";
 import { usePrompts } from "../hooks/usePrompts";
 import { PROMPT_TEMPLATES } from "../prompts";
 import { useTheme } from "../theme/ThemeContext";
@@ -24,6 +26,7 @@ export function ChatPage() {
   const auth = useAuth();
   const accessToken = auth.user?.access_token ?? "";
   const theme = useTheme();
+  const isAdmin = useIsAdmin();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -33,6 +36,7 @@ export function ChatPage() {
   const [listError, setListError] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
+  const [kbOpen, setKbOpen] = useState(false);
 
   const {
     prompts: userPrompts,
@@ -205,6 +209,21 @@ export function ChatPage() {
         keywords: "prompts library manage",
         onRun: () => setPromptLibraryOpen(true),
       },
+      // Admin-only: KB management. Conditional spread keeps the entry out
+      // of the command palette entirely for non-admins — the palette itself
+      // stays visible to everyone.
+      ...(isAdmin
+        ? [
+            {
+              id: "manage-kb",
+              label: "Manage knowledge base…",
+              group: "Library",
+              hint: "Upload or remove reference documents available to Praxis",
+              keywords: "knowledge base kb documents rag retrieval admin",
+              onRun: () => setKbOpen(true),
+            } satisfies Command,
+          ]
+        : []),
     ];
 
     const conversationCmds: Command[] = conversations.slice(0, 20).map((c) => ({
@@ -222,7 +241,7 @@ export function ChatPage() {
       ...models,
       ...conversationCmds,
     ];
-  }, [conversations, handleNewChat, handleSignOut, theme, userPrompts]);
+  }, [conversations, handleNewChat, handleSignOut, isAdmin, theme, userPrompts]);
 
   return (
     <>
@@ -258,6 +277,11 @@ export function ChatPage() {
         onUpdate={updateUserPrompt}
         onDelete={removeUserPrompt}
         starterTemplates={PROMPT_TEMPLATES}
+      />
+      <KnowledgeBase
+        open={kbOpen}
+        onClose={() => setKbOpen(false)}
+        accessToken={accessToken}
       />
     </>
   );

@@ -6,12 +6,31 @@ export interface ChatRequest {
   model?: string;
 }
 
+/**
+ * Per-source retrieval metadata returned with each chat response. The
+ * assistant may cite these inline as `[1]`, `[2]`, etc. — `index` is the
+ * number used in those citations. `score` is the raw cosine similarity; the
+ * UI surfaces it only as a coarse hover tooltip.
+ *
+ * See docs/KB_CONTRACT.md for the backend retrieval contract.
+ */
+export interface Source {
+  index: number;
+  docTitle: string;
+  sourceType: string;
+  pageNumber?: number;
+  score: number;
+}
+
 export interface ChatResponse {
   conversationId: string;
   messageId: string;
   assistantMessage: string;
   tokens: { input: number; output: number };
   model: string;
+  /** Chunks retrieved + injected into the prompt, in citation order.
+   *  `[]` when no chunks cleared the min_score threshold. */
+  sources: Source[];
 }
 
 export function postChat(accessToken: string, req: ChatRequest): Promise<ChatResponse> {

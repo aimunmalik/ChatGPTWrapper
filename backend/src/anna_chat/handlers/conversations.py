@@ -65,6 +65,7 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
                             "role": m.role,
                             "content": m.content,
                             "createdAt": int(m.sortKey.split("#")[0]),
+                            "sources": list(m.sources) if m.sources else [],
                         }
                         for m in msgs
                     ],

@@ -2,10 +2,14 @@ import time
 from functools import lru_cache
 from typing import Any
 
+from anna_chat import kb_retrieve
 from anna_chat.attachments_repo import AttachmentsRepo
 from anna_chat.bedrock_client import BedrockClient
 from anna_chat.ddb import Repository
+from anna_chat.embeddings import EmbeddingsClient
 from anna_chat.http import HttpError, authenticate, error, ok, parse_json_body
+from anna_chat.kb_repo import KbRepo
+from anna_chat.kb_retrieve import RetrievedChunk
 from anna_chat.logging_config import configure_logging, get_logger
 from anna_chat.settings import Settings
 
@@ -31,7 +35,11 @@ SYSTEM_PROMPT = (
     "any careful work — accuracy over speed, flag uncertainty, do not make "
     "up facts — but do not impose clinical framing where it does not belong.\n\n"
     "If the user attaches documents, treat them as primary context and "
-    "reference them specifically."
+    "reference them specifically.\n\n"
+    "When the <knowledge> block contains relevant material, prefer it over "
+    "your general knowledge and cite the source number in your response like "
+    "[1] or [Source 2]. When no relevant material is returned, answer from "
+    "general knowledge and say so briefly."
 )
 
 ALLOWED_MODELS: set[str] = {
@@ -73,6 +81,65 @@ def _attachments_repo() -> AttachmentsRepo | None:
         region=s.aws_region,
         message_ttl_days=s.message_ttl_days,
     )
+
+
+@lru_cache(maxsize=1)
+def _kb_repo() -> KbRepo | None:
+    s = _settings()
+    if not s.kb_table:
+        return None
+    return KbRepo(kb_table=s.kb_table, region=s.aws_region)
+
+
+@lru_cache(maxsize=1)
+def _embeddings() -> EmbeddingsClient | None:
+    s = _settings()
+    if not s.kb_table:
+        return None
+    return EmbeddingsClient(region=s.aws_region)
+
+
+def _format_knowledge_block(retrieved: list[RetrievedChunk]) -> str:
+    """Render the <knowledge>...</knowledge> block per the KB contract."""
+    if not retrieved:
+        return (
+            "<knowledge>\n"
+            "No relevant material found in the ANNA knowledge base.\n"
+            "</knowledge>"
+        )
+    parts: list[str] = []
+    for i, chunk in enumerate(retrieved, start=1):
+        header = f"[Source {i}] {chunk.doc_title}"
+        extras: list[str] = []
+        if chunk.section_title:
+            extras.append(f"section: {chunk.section_title}")
+        if chunk.page_number is not None:
+            extras.append(f"page {chunk.page_number}")
+        if extras:
+            header += " — " + ", ".join(extras)
+        parts.append(f"{header}\n{chunk.chunk_text}")
+    body = "\n\n---\n\n".join(parts)
+    return f"<knowledge>\n{body}\n</knowledge>"
+
+
+def _retrieve_sources(user_message: str) -> list[RetrievedChunk]:
+    """Run KB retrieval if configured; swallow errors to keep chat alive."""
+    kb_repo = _kb_repo()
+    embeddings = _embeddings()
+    if kb_repo is None or embeddings is None:
+        return []
+    try:
+        return kb_retrieve.retrieve(
+            user_message, embeddings=embeddings, repo=kb_repo
+        )
+    except Exception as exc:
+        # Retrieval is best-effort — if Bedrock embeddings aren't enabled or
+        # the KB table is cold, we still want the user's chat turn to succeed.
+        logger.error(
+            "kb_retrieve_failed",
+            extra={"errorType": type(exc).__name__},
+        )
+        return []
 
 
 def _prepend_attachments(
@@ -142,13 +209,34 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
 
         history = repo.recent_turns_for_model(conversation_id=conv.conversationId)
 
+        # RAG retrieval — run on the raw user message BEFORE it's augmented
+        # with attachment blocks. We want the semantic search to match the
+        # user's question, not attachment content.
+        retrieved = _retrieve_sources(user_message)
+        knowledge_block = _format_knowledge_block(retrieved)
+        sources = [
+            {
+                "index": i + 1,
+                "docTitle": c.doc_title,
+                "sourceType": c.source_type,
+                "pageNumber": c.page_number,
+                "score": round(c.score, 3),
+            }
+            for i, c in enumerate(retrieved)
+        ]
+
         # Persist the raw user message (what the user actually typed), but send
-        # Bedrock a version with <attachment> blocks prepended so it can reason
-        # over extracted text. Never log the augmented content.
+        # Bedrock a version with <knowledge> + <attachment> blocks prepended so
+        # it can reason over retrieved and user-attached context. Storing the
+        # augmented version in DDB would leak KB content into the conversation
+        # history and surface it in the UI — we keep the stored message clean
+        # and rebuild the augmented view each turn.
         augmented_message, attachment_meta = _prepend_attachments(
             _attachments_repo(), conv.conversationId, user_message
         )
-        history.append({"role": "user", "content": augmented_message})
+        # Prepend the knowledge block ahead of attachments and the raw message.
+        augmented_for_bedrock = knowledge_block + "\n\n" + augmented_message
+        history.append({"role": "user", "content": augmented_for_bedrock})
 
         repo.append_message(
             conversation_id=conv.conversationId,
@@ -170,6 +258,7 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
             input_tokens=bedrock_resp.input_tokens,
             output_tokens=bedrock_resp.output_tokens,
             model=model_id,
+            sources=sources,
         )
         repo.touch_conversation(user_id=user.sub, conversation_id=conv.conversationId)
 
@@ -187,6 +276,8 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
                 "stopReason": bedrock_resp.stop_reason,
                 "attachments": attachment_meta,
                 "attachmentCount": len(attachment_meta),
+                "kbSourceCount": len(sources),
+                "kbTopScore": sources[0]["score"] if sources else 0.0,
             },
         )
 
@@ -200,6 +291,7 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
                     "output": bedrock_resp.output_tokens,
                 },
                 "model": model_id,
+                "sources": sources,
             }
         )
     except HttpError as exc:

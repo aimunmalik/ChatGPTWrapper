@@ -1,6 +1,6 @@
 import time
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import boto3
@@ -29,6 +29,7 @@ class Message:
     outputTokens: int = 0
     model: str = ""
     ttl: int = 0
+    sources: list[dict[str, Any]] = field(default_factory=list)
 
 
 class Repository:
@@ -109,6 +110,7 @@ class Repository:
         input_tokens: int = 0,
         output_tokens: int = 0,
         model: str = "",
+        sources: list[dict[str, Any]] | None = None,
     ) -> Message:
         now = self._now_ms()
         message_id = f"m_{uuid.uuid4().hex[:16]}"
@@ -123,6 +125,7 @@ class Repository:
             outputTokens=output_tokens,
             model=model,
             ttl=int(time.time()) + self._ttl_seconds,
+            sources=list(sources) if sources else [],
         )
         self._messages.put_item(Item=asdict(msg))
         return msg
@@ -133,7 +136,15 @@ class Repository:
             Limit=limit,
             ScanIndexForward=True,
         )
-        return [Message(**item) for item in resp.get("Items", [])]
+        messages: list[Message] = []
+        for item in resp.get("Items", []):
+            # Backfill sources for older rows that were written before the
+            # field existed. Defaulting at read time keeps the dataclass
+            # contract consistent regardless of when the row was created.
+            if "sources" not in item:
+                item["sources"] = []
+            messages.append(Message(**item))
+        return messages
 
     def recent_turns_for_model(
         self, *, conversation_id: str, max_turns: int = 20

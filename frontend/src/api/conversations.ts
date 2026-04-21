@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import type { Source } from "./chat";
 
 export interface Conversation {
   userId: string;
@@ -14,6 +15,9 @@ export interface MessageSummary {
   role: "user" | "assistant" | "system";
   content: string;
   createdAt: number;
+  /** Citations persisted alongside the assistant message. Absent on user/
+   *  system messages and on assistant messages that predate KB retrieval. */
+  sources?: Source[];
 }
 
 export interface ConversationDetail {

@@ -1227,3 +1227,360 @@ h1, h2, h3, h4, h5 {
   border-color: var(--c-danger);
   color: var(--c-danger);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Message sources / citations (Phase 7)
+   Rendered below assistant messages that had KB chunks retrieved.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.message__sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+
+.message__source-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--c-text-muted);
+  background: var(--c-primary-soft);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-pill);
+  cursor: help;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message__source-pill:hover {
+  background: rgba(255, 120, 150, 0.20);
+  border-color: var(--c-primary);
+  color: var(--c-ink);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Knowledge base modal (Phase 7)
+   Reuses .cmdk-overlay + .cmdk-panel for the modal shell, like the
+   prompt library. All KB-specific classes are prefixed .kb-*.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.kb-library .kb-library__panel {
+  width: min(92vw, 820px);
+  display: flex;
+  flex-direction: column;
+  max-height: min(86vh, 820px);
+}
+
+.kb-library__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--c-border);
+}
+.kb-library__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-ink);
+  letter-spacing: -0.01em;
+}
+.kb-library__close {
+  border: 0;
+  background: transparent;
+  color: var(--c-text-muted);
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.kb-library__close:hover {
+  background: var(--c-surface-soft);
+  color: var(--c-ink);
+}
+
+.kb-library__body {
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.kb-library__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--c-surface-soft);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  margin-bottom: 18px;
+}
+.kb-library__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+.kb-library__field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.kb-library__field-hint {
+  align-self: flex-end;
+  font-size: 11px;
+  color: var(--c-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.kb-library__input {
+  width: 100%;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--c-surface);
+  color: var(--c-text);
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+.kb-library__input:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px var(--c-primary-soft);
+}
+.kb-library__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.kb-library__file-input {
+  font-size: 13px;
+  color: var(--c-text);
+}
+
+.kb-library__error {
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--c-danger);
+  font-size: 13px;
+}
+
+.kb-library__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+.kb-library__actions-spacer { flex: 1; }
+
+.kb-library__list-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.kb-library__list-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.kb-library__list-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-text-muted);
+  background: var(--c-surface-soft);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-pill);
+  line-height: 1.4;
+}
+
+.kb-library__empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--c-text-muted);
+  font-size: 13.5px;
+  background: var(--c-surface-soft);
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius);
+}
+
+.kb-library__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kb-library__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-surface);
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+.kb-library__item:hover {
+  border-color: var(--c-border-strong);
+  box-shadow: var(--shadow-1);
+}
+.kb-library__item-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.kb-library__item-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--c-ink);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kb-library__item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kb-library__item-date {
+  font-size: 11.5px;
+  color: var(--c-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.kb-library__item-delete {
+  border: 0;
+  background: transparent;
+  color: var(--c-text-subtle);
+  font-size: 20px;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  transition: color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+}
+.kb-library__item-delete:hover:not(:disabled) {
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+}
+.kb-library__item-delete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Source-type badges — coloured softly by category; the exact colour
+   is cosmetic, the meaning comes from the label + title tooltip. */
+.kb-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-pill);
+  background: var(--c-surface-soft);
+  color: var(--c-text-muted);
+  border: 1px solid var(--c-border);
+}
+.kb-badge--research {
+  color: var(--brand-navy);
+  background: rgba(140, 220, 255, 0.20);
+  border-color: rgba(140, 220, 255, 0.45);
+}
+.kb-badge--training {
+  color: var(--c-primary-hover);
+  background: rgba(255, 120, 150, 0.12);
+  border-color: rgba(255, 120, 150, 0.30);
+}
+.kb-badge--protocol {
+  color: var(--brand-green);
+  background: rgba(42, 107, 60, 0.10);
+  border-color: rgba(42, 107, 60, 0.28);
+}
+.kb-badge--parent-training {
+  color: var(--brand-tan);
+  background: rgba(189, 134, 98, 0.12);
+  border-color: rgba(189, 134, 98, 0.30);
+}
+.kb-badge--other {
+  color: var(--c-text-muted);
+}
+
+/* Status pills — colour-coded by stage. Uploading is neutral; the three
+   processing stages share a warm yellow progress tint; ready is brand-
+   green; error is red. */
+.kb-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-pill);
+  background: var(--c-surface-soft);
+  color: var(--c-text-muted);
+  border: 1px solid var(--c-border);
+}
+.kb-status--uploading {
+  color: var(--c-text-muted);
+  background: var(--c-surface-soft);
+  border-color: var(--c-border-strong);
+}
+.kb-status--extracting,
+.kb-status--chunking,
+.kb-status--embedding {
+  color: #7A5A00;
+  background: rgba(255, 218, 140, 0.30);
+  border-color: rgba(255, 218, 140, 0.70);
+}
+.kb-status--ready {
+  color: var(--c-success);
+  background: rgba(21, 128, 61, 0.08);
+  border-color: rgba(21, 128, 61, 0.25);
+}
+.kb-status--error {
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+  border-color: var(--c-danger);
+  cursor: help;
+}
+
+[data-theme="dark"] .kb-status--extracting,
+[data-theme="dark"] .kb-status--chunking,
+[data-theme="dark"] .kb-status--embedding {
+  color: #FFDA8C;
+  background: rgba(255, 218, 140, 0.15);
+  border-color: rgba(255, 218, 140, 0.35);
+}

@@ -106,6 +106,16 @@ output "prompts_table_name" {
   value       = module.prompts.table_name
 }
 
+output "kb_bucket_name" {
+  description = "S3 bucket storing admin-uploaded knowledge-base source documents."
+  value       = module.kb.bucket_name
+}
+
+output "kb_table_name" {
+  description = "DynamoDB table storing knowledge-base document metadata and embedded chunks."
+  value       = module.kb.table_name
+}
+
 output "github_actions_role_arn" {
   description = "IAM role ARN assumed by GitHub Actions via OIDC. Set this as the AWS_ROLE_ARN GitHub repo variable."
   value       = aws_iam_role.github_actions.arn

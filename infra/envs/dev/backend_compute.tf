@@ -13,11 +13,15 @@ locals {
     BEDROCK_MODEL_ID           = var.bedrock_model_id
     MESSAGE_TTL_DAYS           = tostring(var.message_ttl_days)
     PROMPTS_TABLE              = module.prompts.table_name
+    KB_TABLE                   = module.kb.table_name
+    KB_BUCKET                  = module.kb.bucket_name
+    KB_MAX_SIZE_BYTES          = "104857600"
   }
 
   bedrock_model_arns = [
     "arn:aws:bedrock:*::foundation-model/anthropic.claude-*",
     "arn:aws:bedrock:*:${local.account_id}:inference-profile/*",
+    "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
   ]
 }
 
@@ -45,6 +49,7 @@ module "lambda_chat" {
     module.dynamodb.conversations_table_arn,
     module.dynamodb.messages_table_arn,
     module.attachments.table_arn,
+    module.kb.table_arn,
   ]
   kms_key_arns       = [module.kms_dynamodb.key_arn]
   bedrock_model_arns = local.bedrock_model_arns
@@ -221,6 +226,94 @@ module "lambda_prompts" {
   tags = local.tags
 }
 
+# ──────────────────────────────────────────────────────────────────────────
+# Phase 7: knowledge base / RAG
+# ──────────────────────────────────────────────────────────────────────────
+
+# Ingestion Lambda runs async off S3 ObjectCreated events in the kb/ prefix.
+# Needs lots of memory + a long timeout because it extracts text (Textract
+# for PDFs), chunks, embeds via Titan, and writes chunks to DDB for the
+# whole document in one invocation. Has access to the KB bucket (GetObject),
+# KB DDB table (RW), both CMKs (Decrypt), Textract, and Bedrock invoke on
+# both Claude (harmless — inherited from the shared list) and Titan
+# embeddings (required).
+module "lambda_kb_ingest" {
+  source = "../../modules/lambda"
+
+  function_name   = "anna-chat-${var.env}-kb-ingest"
+  handler         = "anna_chat.handlers.kb_ingest.handler"
+  zip_path        = local.lambda_zip_path
+  timeout_seconds = 600
+  memory_mb       = 3072
+
+  environment_variables = merge(local.lambda_env, {
+    AWS_LAMBDA_LOG_FORMAT = "JSON"
+  })
+
+  log_retention_days = var.log_retention_days
+  logs_kms_key_arn   = module.kms_logs.key_arn
+
+  vpc_id         = module.network.vpc_id
+  vpc_cidr       = module.network.vpc_cidr
+  vpc_subnet_ids = module.network.private_subnet_ids
+
+  dynamodb_table_arns = [module.kb.table_arn]
+  kms_key_arns = [
+    module.kms_dynamodb.key_arn,
+    module.kms_s3.key_arn,
+  ]
+  s3_bucket_arns     = [module.kb.bucket_arn]
+  textract_enabled   = true
+  bedrock_model_arns = local.bedrock_model_arns
+
+  tags = local.tags
+}
+
+module "kb" {
+  source = "../../modules/kb"
+
+  env                  = var.env
+  kms_key_arn          = module.kms_s3.key_arn
+  dynamodb_kms_key_arn = module.kms_dynamodb.key_arn
+  cors_allow_origins   = var.cors_allow_origins
+  ingest_lambda_arn    = module.lambda_kb_ingest.function_arn
+  deletion_protection  = var.env == "prod"
+
+  tags = local.tags
+}
+
+# Admin CRUD handler — presigns uploads, lists docs, deletes. Needs the KB
+# table (RW for metadata + chunk deletion), both CMKs (DDB + S3 via
+# presigned URLs that use this Lambda's credentials), and the KB bucket for
+# object deletes. No Textract and no Bedrock — those belong to the ingest
+# lambda.
+module "lambda_kb" {
+  source = "../../modules/lambda"
+
+  function_name   = "anna-chat-${var.env}-kb"
+  handler         = "anna_chat.handlers.kb.handler"
+  zip_path        = local.lambda_zip_path
+  timeout_seconds = 15
+  memory_mb       = 512
+
+  environment_variables = merge(local.lambda_env, {
+    AWS_LAMBDA_LOG_FORMAT = "JSON"
+  })
+
+  log_retention_days = var.log_retention_days
+  logs_kms_key_arn   = module.kms_logs.key_arn
+
+  vpc_id         = module.network.vpc_id
+  vpc_cidr       = module.network.vpc_cidr
+  vpc_subnet_ids = module.network.private_subnet_ids
+
+  dynamodb_table_arns = [module.kb.table_arn]
+  kms_key_arns        = [module.kms_dynamodb.key_arn, module.kms_s3.key_arn]
+  s3_bucket_arns      = [module.kb.bucket_arn]
+
+  tags = local.tags
+}
+
 module "api" {
   source = "../../modules/api"
 
@@ -277,6 +370,18 @@ module "api" {
     "DELETE /prompts/{promptId}" = {
       lambda_function_name = module.lambda_prompts.function_name
       lambda_invoke_arn    = module.lambda_prompts.invoke_arn
+    }
+    "POST /kb/presigned-upload" = {
+      lambda_function_name = module.lambda_kb.function_name
+      lambda_invoke_arn    = module.lambda_kb.invoke_arn
+    }
+    "GET /kb/documents" = {
+      lambda_function_name = module.lambda_kb.function_name
+      lambda_invoke_arn    = module.lambda_kb.invoke_arn
+    }
+    "DELETE /kb/documents/{kbDocId}" = {
+      lambda_function_name = module.lambda_kb.function_name
+      lambda_invoke_arn    = module.lambda_kb.invoke_arn
     }
   }
 

@@ -9,6 +9,7 @@ from anna_chat.http import (
     error,
     ok,
     parse_json_body,
+    require_admin,
 )
 from anna_chat.settings import Settings
 
@@ -27,6 +28,9 @@ def _settings() -> Settings:
         attachments_max_size_bytes=52428800,
         attachments_max_text_bytes=512000,
         prompts_table="t-prompts",
+        kb_table="t-kb",
+        kb_bucket="b-kb",
+        kb_max_size_bytes=104857600,
     )
 
 
@@ -104,3 +108,28 @@ def test_authenticate_missing_claims_raises_401():
     with pytest.raises(HttpError) as exc:
         authenticate({}, _settings())
     assert exc.value.status == 401
+
+
+def test_require_admin_passes_for_admin_user():
+    admin = AuthenticatedUser(
+        sub="u_admin", email="a@x.com", name="A", groups=("admins", "users")
+    )
+    # Should not raise.
+    require_admin(admin)
+
+
+def test_require_admin_raises_403_for_non_admin():
+    non_admin = AuthenticatedUser(
+        sub="u_user", email="u@x.com", name="U", groups=("users",)
+    )
+    with pytest.raises(HttpError) as exc:
+        require_admin(non_admin)
+    assert exc.value.status == 403
+    assert "admin only" in exc.value.message
+
+
+def test_require_admin_raises_403_for_no_groups():
+    user = AuthenticatedUser(sub="u_x", email="", name="", groups=())
+    with pytest.raises(HttpError) as exc:
+        require_admin(user)
+    assert exc.value.status == 403
