@@ -6,8 +6,9 @@
 # without falling back to DevTools round-trips. Scoped tight enough that a
 # compromise of the dev user can't touch prod resources or write anything.
 #
-# Attach to the user by name via var.developer_iam_user_name (tfvars). Leave
-# blank to skip attaching — the policy still exists for future use.
+# NOT attached from Terraform — see note below the policy resource. Attach
+# manually via the AWS console or:
+#   aws iam attach-user-policy --user-name <dev-user> --policy-arn <arn>
 # ──────────────────────────────────────────────────────────────────────────
 
 data "aws_iam_policy_document" "developer_read" {
