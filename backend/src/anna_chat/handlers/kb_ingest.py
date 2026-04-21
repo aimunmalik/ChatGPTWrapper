@@ -283,10 +283,16 @@ def _process_record(record: dict[str, Any]) -> None:
             status="error",
             status_message=type(exc).__name__,
         )
+        # str(exc) for library/stdlib exceptions is generally a generic
+        # message (e.g. "ord() expected string..."); it does NOT echo the
+        # PDF content. This field is essential for debugging ingest
+        # failures — "TypeError" alone gave us no idea which line broke.
         logger.error(
             "kb_ingest_failed",
             extra={
                 "kbDocId": kb_doc_id,
                 "errorType": type(exc).__name__,
+                "errorMessage": str(exc)[:500],
             },
+            exc_info=True,
         )
