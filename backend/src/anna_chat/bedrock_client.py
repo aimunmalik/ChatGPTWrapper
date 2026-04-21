@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import boto3
+from botocore.config import Config
 
 
 @dataclass(frozen=True)
@@ -13,9 +14,25 @@ class BedrockResponse:
     stop_reason: str
 
 
+# API Gateway HTTP API has a hard 30s integration timeout. With default boto
+# retries (3 attempts + exponential backoff) a ThrottlingException burst can
+# easily eat the whole window and 503 the client before Bedrock finishes
+# responding. We cap the read timeout at 25s and allow one retry — that
+# still covers a single transient throttle without blowing past API GW.
+_BEDROCK_CONFIG = Config(
+    connect_timeout=5,
+    read_timeout=25,
+    retries={"max_attempts": 2, "mode": "standard"},
+)
+
+
 class BedrockClient:
     def __init__(self, *, region: str, model_id: str) -> None:
-        self._client = boto3.client("bedrock-runtime", region_name=region)
+        self._client = boto3.client(
+            "bedrock-runtime",
+            region_name=region,
+            config=_BEDROCK_CONFIG,
+        )
         self._model_id = model_id
 
     @property
