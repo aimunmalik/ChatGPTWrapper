@@ -233,3 +233,49 @@ def test_cache_refreshed_after_ttl(monkeypatch):
         "q", embeddings=embeddings, repo=repo, top_k=5, min_score=0.0
     )
     assert scan_calls["n"] == 2
+
+
+def test_empty_cache_uses_short_ttl(monkeypatch):
+    """An empty scan result should NOT be cached for the full 5 minutes —
+    otherwise a warm Lambda that scanned before the first doc was ingested
+    would keep serving 'no KB material' well past the admin upload."""
+    _setup(monkeypatch)
+    clock = {"t": 100.0}
+    monkeypatch.setattr(kb_retrieve.time, "monotonic", lambda: clock["t"])
+
+    query_vec = _unit([1.0, 0.0])
+    embeddings = _FakeEmbeddings({"q": query_vec})
+
+    scan_calls = {"n": 0}
+    returned: list = []  # empty first, populated later
+
+    class CountingRepo:
+        def scan_all_chunks(self):
+            scan_calls["n"] += 1
+            return list(returned)
+
+    repo = CountingRepo()
+
+    # First call: KB empty → cached as [].
+    kb_retrieve.retrieve(
+        "q", embeddings=embeddings, repo=repo, top_k=5, min_score=0.0
+    )
+    assert scan_calls["n"] == 1
+
+    # 5 seconds later: still within EMPTY_CACHE_TTL_SECONDS → no rescan.
+    clock["t"] = 105.0
+    kb_retrieve.retrieve(
+        "q", embeddings=embeddings, repo=repo, top_k=5, min_score=0.0
+    )
+    assert scan_calls["n"] == 1
+
+    # Past the short TTL (not past the 5-min full TTL) → should rescan.
+    clock["t"] = 100.0 + kb_retrieve.EMPTY_CACHE_TTL_SECONDS + 1
+    # Simulate admin upload finishing — DDB now has a chunk.
+    returned.append(_chunk(0, _unit([1.0, 0.0]), text="new upload"))
+    results = kb_retrieve.retrieve(
+        "q", embeddings=embeddings, repo=repo, top_k=5, min_score=0.0
+    )
+    assert scan_calls["n"] == 2
+    assert len(results) == 1
+    assert results[0].chunk_text == "new upload"

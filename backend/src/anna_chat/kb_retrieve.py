@@ -26,6 +26,12 @@ from anna_chat.logging_config import get_logger
 logger = get_logger(__name__)
 
 CACHE_TTL_SECONDS = 5 * 60
+# Much shorter TTL when the last scan came back empty — otherwise a warm
+# Lambda that scanned DDB before the first doc was ingested will keep
+# serving "no KB material" for a full 5 minutes after the admin uploads.
+# 15 seconds is enough that a busy chat Lambda isn't scanning DDB on every
+# turn, but short enough that new uploads show up quickly.
+EMPTY_CACHE_TTL_SECONDS = 15
 
 # Module-level cache shared across warm-invocation handler calls.
 _CACHED_CHUNKS: list[Chunk] | None = None
@@ -69,11 +75,19 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 
 def _load_chunks(repo: KbRepo, *, now: float | None = None) -> list[Chunk]:
-    """Return cached chunks, refreshing from DDB if the cache is stale."""
+    """Return cached chunks, refreshing from DDB if the cache is stale.
+
+    Uses a shorter TTL when the last scan returned zero chunks — that's
+    the "KB is empty" state, which flips to non-empty the moment an admin
+    finishes uploading. The full 5-minute TTL only kicks in once we've
+    seen non-empty results.
+    """
     global _CACHED_CHUNKS, _CACHED_AT
     now = now if now is not None else time.monotonic()
-    if _CACHED_CHUNKS is not None and (now - _CACHED_AT) < CACHE_TTL_SECONDS:
-        return _CACHED_CHUNKS
+    if _CACHED_CHUNKS is not None:
+        ttl = CACHE_TTL_SECONDS if _CACHED_CHUNKS else EMPTY_CACHE_TTL_SECONDS
+        if (now - _CACHED_AT) < ttl:
+            return _CACHED_CHUNKS
     chunks = repo.scan_all_chunks()
     _CACHED_CHUNKS = chunks
     _CACHED_AT = now
