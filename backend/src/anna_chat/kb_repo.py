@@ -14,6 +14,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
+from decimal import Decimal
 from typing import Any
 
 import boto3
@@ -248,7 +249,17 @@ class KbRepo:
     # ---------- chunk writes / reads ----------
 
     def write_chunks(self, kb_doc_id: str, chunks: list[ChunkRecord]) -> None:
-        """Batch-write chunk items. DDB `batch_writer` auto-chunks to 25/request."""
+        """Batch-write chunk items. DDB `batch_writer` auto-chunks to 25/request.
+
+        Important: DynamoDB (via boto3's resource interface) does NOT
+        accept raw Python floats — it raises
+        `TypeError("Float types are not supported. Use Decimal types
+        instead.")` at serialization time. Titan Embed v2 returns
+        1024-dim float vectors, so every embedding must be coerced to
+        Decimal before writing. Going through `str()` first preserves
+        the exact decimal representation and avoids the
+        `Decimal(0.1) == 0.1000000000000000055...` binary-float gotcha.
+        """
         if not chunks:
             return
         doc = self.get_doc(kb_doc_id)
@@ -257,15 +268,14 @@ class KbRepo:
         now_ms = self._now_ms()
         with self._table.batch_writer() as batch:
             for chunk in chunks:
+                embedding_decimal = [Decimal(str(x)) for x in chunk.embedding]
                 item: dict[str, Any] = {
                     "kbDocId": kb_doc_id,
                     "sk": self._chunk_sk(chunk.chunkIdx),
                     "chunkIdx": int(chunk.chunkIdx),
                     "chunkText": chunk.chunkText,
                     "chunkTokens": int(chunk.chunkTokens),
-                    # DDB resource client converts Python floats to Decimal on
-                    # the wire automatically — no explicit wrapping needed.
-                    "embedding": chunk.embedding,
+                    "embedding": embedding_decimal,
                     "docTitle": doc_title,
                     "sourceType": source_type,
                     "createdAt": now_ms,

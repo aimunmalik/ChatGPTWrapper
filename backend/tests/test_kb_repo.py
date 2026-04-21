@@ -324,6 +324,17 @@ def test_write_chunks_uses_batch_writer_with_chunk_sks():
     # Optional fields absent when None.
     assert "pageNumber" not in captured[1]
     assert "sectionTitle" not in captured[1]
+    # Embeddings MUST be Decimal, not raw float — boto3's DDB resource
+    # serializer refuses Python floats at wire time with a TypeError. This
+    # killed every PDF ingest in prod until we caught it. Guard against it
+    # coming back.
+    from decimal import Decimal
+
+    for cap in captured:
+        assert all(isinstance(x, Decimal) for x in cap["embedding"]), (
+            f"embedding contained non-Decimal types: "
+            f"{[type(x).__name__ for x in cap['embedding']]}"
+        )
 
 
 def test_scan_all_chunks_paginates_and_hydrates_chunks():
