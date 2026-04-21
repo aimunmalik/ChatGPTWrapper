@@ -101,9 +101,10 @@ export function KnowledgeBase({ open, onClose, accessToken }: Props) {
   }
 
   async function handleDelete(doc: KbDocument) {
-    if (!window.confirm(`Delete "${doc.docTitle}"? This can't be undone.`)) {
-      return;
-    }
+    // One-click delete — admins are frequently cleaning up stuck/failed
+    // uploads and a modal per row is friction. Safety net: the KB S3 bucket
+    // has versioning + a 60-day noncurrent retention window, so a mis-click
+    // is recoverable via the S3 console within that window.
     await remove(doc.kbDocId);
   }
 
