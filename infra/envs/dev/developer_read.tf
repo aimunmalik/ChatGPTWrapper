@@ -10,12 +10,6 @@
 # blank to skip attaching — the policy still exists for future use.
 # ──────────────────────────────────────────────────────────────────────────
 
-variable "developer_iam_user_name" {
-  description = "IAM user to grant read-only observability on anna-chat-* resources. Empty string disables attachment."
-  type        = string
-  default     = "lucent-dev"
-}
-
 data "aws_iam_policy_document" "developer_read" {
   # CloudWatch Logs: read events from every anna-chat-dev-* log group. This
   # is the big one — it's what `aws logs tail` + `filter-log-events` need.
@@ -81,10 +75,18 @@ resource "aws_iam_policy" "developer_read" {
   tags = local.tags
 }
 
-# Attach to the developer user. Skipped entirely when the var is blank so
-# the policy can exist without requiring any particular user to exist.
-resource "aws_iam_user_policy_attachment" "developer_read" {
-  count      = var.developer_iam_user_name == "" ? 0 : 1
-  user       = var.developer_iam_user_name
-  policy_arn = aws_iam_policy.developer_read.arn
+# NOTE: We intentionally do NOT attach this policy from Terraform. The CI
+# deploy role was scoped in Tier C to remove iam:Attach*Policy — exactly
+# so a compromised PR couldn't elevate a user to admin. Attach manually:
+#
+#   aws iam attach-user-policy \
+#     --user-name lucent-dev \
+#     --policy-arn arn:aws:iam::<account>:policy/anna-chat-dev-developer-read
+#
+# Or click through the AWS console → IAM → Users → lucent-dev → Add
+# permissions → Attach policies → anna-chat-dev-developer-read.
+
+output "developer_read_policy_arn" {
+  description = "ARN of the developer read-only policy. Attach to a developer IAM user manually (CI role can't attach by design)."
+  value       = aws_iam_policy.developer_read.arn
 }
