@@ -135,8 +135,24 @@ def _truncate(text: str, max_bytes: int) -> ExtractionResult:
 # ---------- per-type extractors ----------
 
 def _extract_textract(data: bytes, *, textract_client=None) -> str:
+    """Synchronous single-page OCR via Textract. Used for PNG/JPEG and as
+    a last-ditch fallback for scanned PDFs whose pypdf pass yielded nothing.
+
+    Note: Textract's synchronous DetectDocumentText API only accepts
+    SINGLE-page PDFs. Multi-page PDFs must use the async API. We route
+    multi-page PDFs through pypdf and only hit this path as a fallback
+    for single-page image-based PDFs — anything larger that trips
+    UnsupportedDocumentException here just means the PDF is a scanned
+    multi-page doc and the caller will get an empty string back.
+    """
     client = textract_client or boto3.client("textract")
-    resp = client.detect_document_text(Document={"Bytes": data})
+    try:
+        resp = client.detect_document_text(Document={"Bytes": data})
+    except client.exceptions.UnsupportedDocumentException:
+        # Scanned multi-page PDF — we can't handle this synchronously.
+        # Returning "" lets the ingest pipeline decide what to do (it'll
+        # mark the doc `error` with a helpful status message).
+        return ""
     lines: list[str] = []
     for block in resp.get("Blocks", []):
         if block.get("BlockType") == "LINE":
@@ -144,6 +160,61 @@ def _extract_textract(data: bytes, *, textract_client=None) -> str:
             if text:
                 lines.append(text)
     return "\n".join(lines)
+
+
+# Minimum pypdf output before we consider a PDF "text-based". Under this
+# threshold we assume the PDF is image-only (scanned) and fall back to
+# Textract for OCR. 120 chars ≈ one line of body text — enough to catch
+# PDFs that only have running headers / page numbers extracted.
+_PYPDF_MIN_CHARS = 120
+
+
+def _extract_pdf(data: bytes, *, textract_client=None) -> str:
+    """Text-first PDF extraction with a Textract fallback for scans.
+
+    pypdf handles the 95%+ case: text-based PDFs produced by Word / LaTeX /
+    Google Docs / academic publishers. It's pure Python, runs in the Lambda
+    process (no network), and supports multi-page natively. If pypdf
+    returns nothing (image-only scanned PDF), fall back to Textract.
+    """
+    # Local import: pypdf is a heavy dep we don't want loading in the
+    # critical path for chat. Only hit on ingest/extract Lambdas.
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+
+    try:
+        reader = PdfReader(io.BytesIO(data))
+    except PdfReadError:
+        # Malformed / encrypted PDF we can't open. Let the caller mark it
+        # an error; Textract is unlikely to do better on a corrupt file.
+        return ""
+
+    if reader.is_encrypted:
+        # Password-protected. pypdf can sometimes open with an empty
+        # password but we don't want to silently bypass user-set crypto.
+        try:
+            if reader.decrypt("") == 0:
+                return ""
+        except Exception:  # pragma: no cover — encrypted paths are fiddly
+            return ""
+
+    parts: list[str] = []
+    for page in reader.pages:
+        try:
+            text = page.extract_text() or ""
+        except Exception:
+            # pypdf can raise on individual pages with weird fonts. Skip
+            # that page rather than failing the whole doc.
+            continue
+        if text:
+            parts.append(text)
+    combined = "\n".join(parts).strip()
+    if len(combined) >= _PYPDF_MIN_CHARS:
+        return combined
+
+    # Scanned PDF — fall through to Textract OCR for pages. Works for
+    # single-page scans; multi-page scans return "" (UnsupportedDocument).
+    return _extract_textract(data, textract_client=textract_client)
 
 
 def _extract_xlsx(data: bytes) -> str:
@@ -201,7 +272,7 @@ def _extract_txt(data: bytes) -> str:
 
 
 _DISPATCH: dict[str, Callable] = {
-    PDF_MIME: _extract_textract,
+    PDF_MIME: _extract_pdf,
     PNG_MIME: _extract_textract,
     JPEG_MIME: _extract_textract,
     XLSX_MIME: _extract_xlsx,

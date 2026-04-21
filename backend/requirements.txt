@@ -3,6 +3,13 @@
 # Attachment extraction deps:
 openpyxl==3.1.5
 python-docx==1.1.2
+# pypdf handles text-based PDFs (the vast majority of research papers,
+# manuals, and anything produced by Word/LaTeX). It extracts multi-page
+# content directly in-process — much faster and cheaper than Textract,
+# and avoids the "synchronous Textract only supports single-page PDFs"
+# UnsupportedDocumentException trap. Textract stays as the fallback for
+# pure image/scanned PDFs where pypdf extracts nothing.
+pypdf==5.1.0
 # XXE / billion-laughs hardening for openpyxl + python-docx (both call into
 # stdlib/lxml XML parsers). defuse_stdlib() is called at import time.
 defusedxml==0.7.1

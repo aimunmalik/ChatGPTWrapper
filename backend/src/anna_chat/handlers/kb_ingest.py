@@ -182,6 +182,26 @@ def _process_record(record: dict[str, Any]) -> None:
         repo.update_doc_status(kb_doc_id=kb_doc_id, status="chunking")
         windows = chunk_text(extracted)
         if not windows:
+            # PDFs that extract to empty text are almost certainly scanned
+            # (image-only) multi-page docs — Textract sync can't handle
+            # those. Mark error with a helpful message rather than silently
+            # "ready" so the admin knows why the doc didn't retrieve.
+            if doc.contentType == PDF_MIME:
+                repo.update_doc_status(
+                    kb_doc_id=kb_doc_id,
+                    status="error",
+                    status_message="NoTextExtracted",
+                    total_chunks=0,
+                )
+                logger.info(
+                    "kb_ingest_no_text",
+                    extra={
+                        "kbDocId": kb_doc_id,
+                        "contentType": doc.contentType,
+                        "latencyMs": int((time.monotonic() - started) * 1000),
+                    },
+                )
+                return
             repo.update_doc_status(
                 kb_doc_id=kb_doc_id,
                 status="ready",

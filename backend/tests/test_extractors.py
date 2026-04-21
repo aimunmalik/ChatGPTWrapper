@@ -104,30 +104,68 @@ def test_extract_xlsx_iterates_sheets_tab_separated():
     assert "a\tb" in result.text
 
 
-def test_extract_pdf_uses_textract_via_stub():
+def test_extract_pdf_uses_pypdf_for_text_based_pdfs(monkeypatch):
+    # pypdf's PdfReader is imported inside _extract_pdf. Patch it there to
+    # avoid needing a real PDF on disk — we're asserting the dispatch path,
+    # not pypdf itself.
+    class _FakePage:
+        def __init__(self, text: str) -> None:
+            self._text = text
+
+        def extract_text(self) -> str:
+            return self._text
+
+    # Text must be >= 120 chars across all pages combined, otherwise the
+    # extractor treats the PDF as "probably scanned" and falls back to
+    # Textract. Make each page comfortably long.
+    page_one_body = "Page one body " + ("lorem ipsum " * 10)
+    page_two_body = "Page two body " + ("lorem ipsum " * 10)
+
+    class _FakeReader:
+        def __init__(self, _stream) -> None:
+            self.is_encrypted = False
+            self.pages = [_FakePage(page_one_body), _FakePage(page_two_body)]
+
+    import pypdf
+
+    monkeypatch.setattr(pypdf, "PdfReader", _FakeReader)
+    result = extract(PDF_MIME, b"%PDF-1.4 fake")
+    assert "Page one body" in result.text
+    assert "Page two body" in result.text
+    assert result.truncated is False
+
+
+def test_extract_pdf_falls_back_to_textract_when_pypdf_empty(monkeypatch):
+    # Scanned single-page PDF: pypdf yields < _PYPDF_MIN_CHARS, so we OCR
+    # through Textract. Multi-page scans still return empty (sync Textract
+    # caps at single-page), and that case is covered by the kb_ingest
+    # NoTextExtracted error branch.
+    class _FakePage:
+        def extract_text(self) -> str:
+            return ""  # image-only scan
+
+    class _FakeReader:
+        def __init__(self, _stream) -> None:
+            self.is_encrypted = False
+            self.pages = [_FakePage()]
+
+    import pypdf
+
+    monkeypatch.setattr(pypdf, "PdfReader", _FakeReader)
+
     client = boto3.client("textract", region_name="us-east-1")
     stub = Stubber(client)
     stub.add_response(
         "detect_document_text",
-        {
-            "Blocks": [
-                {"BlockType": "PAGE"},
-                {"BlockType": "LINE", "Text": "Line one"},
-                {"BlockType": "LINE", "Text": "Line two"},
-                {"BlockType": "WORD", "Text": "ignored"},
-            ]
-        },
+        {"Blocks": [{"BlockType": "LINE", "Text": "OCR'd line"}]},
         {"Document": {"Bytes": b"%PDF-1.4 fake"}},
     )
     stub.activate()
     try:
-        result = extract(
-            PDF_MIME, b"%PDF-1.4 fake", textract_client=client
-        )
+        result = extract(PDF_MIME, b"%PDF-1.4 fake", textract_client=client)
     finally:
         stub.deactivate()
-    assert result.text == "Line one\nLine two"
-    assert result.truncated is False
+    assert result.text == "OCR'd line"
 
 
 def test_extract_png_uses_textract_via_stub():
@@ -168,20 +206,21 @@ def test_extract_rejects_unsupported_content_type():
 
 
 def test_extract_truncation_flag_on_textract_output():
+    # PNG → Textract sync (single image), so this exercises the same
+    # truncation wrapper as before without needing a multi-page PDF stub.
     client = boto3.client("textract", region_name="us-east-1")
     stub = Stubber(client)
-    # Many lines so total bytes exceed the cap.
     long_line = "A" * 200
     blocks = [{"BlockType": "LINE", "Text": long_line} for _ in range(20)]
     stub.add_response(
         "detect_document_text",
         {"Blocks": blocks},
-        {"Document": {"Bytes": b"x"}},
+        {"Document": {"Bytes": b"\x89PNG..."}},
     )
     stub.activate()
     try:
         result = extract(
-            PDF_MIME, b"x", textract_client=client, max_text_bytes=500
+            PNG_MIME, b"\x89PNG...", textract_client=client, max_text_bytes=500
         )
     finally:
         stub.deactivate()
