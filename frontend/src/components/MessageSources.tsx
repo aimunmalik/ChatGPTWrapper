@@ -74,6 +74,23 @@ export function MessageSources({ sources }: Props) {
     <div className="message__sources">
       {sources.map((s) => {
         const isLoading = !!loading[s.index];
+        // Assistant messages persisted before the download feature shipped
+        // don't carry a kbDocId. Render those as a static chip with a
+        // tooltip that explains why — more honest than a click that
+        // silently does nothing.
+        const canOpen = Boolean(s.kbDocId);
+        if (!canOpen) {
+          return (
+            <span
+              key={s.index}
+              className="message__source-pill message__source-pill--static"
+              title="This source was cited before per-message download links were supported. Ask a new question to get clickable sources."
+              aria-label={`Source ${s.index}: ${s.docTitle} (not openable — legacy message)`}
+            >
+              [{s.index}] {s.docTitle}
+            </span>
+          );
+        }
         return (
           <button
             key={s.index}
