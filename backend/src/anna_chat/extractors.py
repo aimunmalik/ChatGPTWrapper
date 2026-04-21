@@ -176,44 +176,50 @@ def _extract_pdf(data: bytes, *, textract_client=None) -> str:
     Google Docs / academic publishers. It's pure Python, runs in the Lambda
     process (no network), and supports multi-page natively. If pypdf
     returns nothing (image-only scanned PDF), fall back to Textract.
+
+    Intentionally broad exception handling — pypdf raises a zoo of errors
+    on unusual / corrupt PDFs (TypeError, ValueError, KeyError, deep
+    AssertionError from its tokenizer, etc.). We want one bad page /
+    malformed trailer to yield "use Textract" rather than killing the
+    whole ingest.
     """
     # Local import: pypdf is a heavy dep we don't want loading in the
     # critical path for chat. Only hit on ingest/extract Lambdas.
     from pypdf import PdfReader
-    from pypdf.errors import PdfReadError
 
     try:
         reader = PdfReader(io.BytesIO(data))
-    except PdfReadError:
-        # Malformed / encrypted PDF we can't open. Let the caller mark it
-        # an error; Textract is unlikely to do better on a corrupt file.
-        return ""
-
-    if reader.is_encrypted:
-        # Password-protected. pypdf can sometimes open with an empty
-        # password but we don't want to silently bypass user-set crypto.
-        try:
-            if reader.decrypt("") == 0:
+        # is_encrypted can itself raise on PDFs with malformed trailers.
+        if reader.is_encrypted:
+            try:
+                if reader.decrypt("") == 0:
+                    return ""
+            except Exception:  # pragma: no cover — encrypted paths are fiddly
                 return ""
-        except Exception:  # pragma: no cover — encrypted paths are fiddly
-            return ""
 
-    parts: list[str] = []
-    for page in reader.pages:
-        try:
-            text = page.extract_text() or ""
-        except Exception:
-            # pypdf can raise on individual pages with weird fonts. Skip
-            # that page rather than failing the whole doc.
-            continue
-        if text:
-            parts.append(text)
-    combined = "\n".join(parts).strip()
+        parts: list[str] = []
+        for page in reader.pages:
+            try:
+                text = page.extract_text() or ""
+            except Exception:
+                # pypdf can raise on individual pages with weird fonts,
+                # unusual encodings, or malformed content streams. Skip
+                # that page rather than failing the whole doc.
+                continue
+            if text:
+                parts.append(text)
+        combined = "\n".join(parts).strip()
+    except Exception:
+        # PdfReader construction or a top-level property access failed.
+        # Fall through to Textract — it's our last-ditch fallback for
+        # PDFs pypdf can't parse at all.
+        combined = ""
+
     if len(combined) >= _PYPDF_MIN_CHARS:
         return combined
 
-    # Scanned PDF — fall through to Textract OCR for pages. Works for
-    # single-page scans; multi-page scans return "" (UnsupportedDocument).
+    # Scanned / pypdf-unparseable PDF — try Textract OCR. Single-page
+    # scans work; multi-page scans return "" (UnsupportedDocument).
     return _extract_textract(data, textract_client=textract_client)
 
 
