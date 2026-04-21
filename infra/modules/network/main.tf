@@ -96,6 +96,12 @@ locals {
     "sts",
     "ssm",
     "monitoring",
+    # Textract is the document-text extractor used by BOTH the attachments
+    # handler and the KB ingestion Lambda (PDFs → Textract → text). Without
+    # this endpoint, any Textract call from a VPC-resident Lambda hangs
+    # until the Lambda times out — the VPC has no NAT gateway by design
+    # (HIPAA: no egress), so DNS resolves but the socket never connects.
+    "textract",
   ]
 }
 

@@ -324,7 +324,15 @@ interface RowProps {
 }
 
 function KbDocRow({ doc, onDelete }: RowProps) {
-  const canDelete = doc.status === "ready" || doc.status === "error";
+  // Allow delete in any "settled" state — including `uploading`, which is
+  // how docs look after an ingest Lambda timeout (stuck forever). Only
+  // the mid-pipeline states (extracting/chunking/embedding) block delete,
+  // since deleting a doc while it's actively writing chunks leaves
+  // half-ingested rows behind.
+  const canDelete =
+    doc.status === "ready" ||
+    doc.status === "error" ||
+    doc.status === "uploading";
   return (
     <li className="kb-library__item">
       <div className="kb-library__item-main">
