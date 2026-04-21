@@ -48,6 +48,10 @@ data "aws_iam_policy_document" "inline" {
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
         "dynamodb:Query",
+        # Scan is needed by the KB repo (list_docs + scan_all_chunks for RAG
+        # retrieval). Still scoped to the specific table ARNs passed in, so
+        # this doesn't widen which tables each Lambda can reach.
+        "dynamodb:Scan",
         "dynamodb:BatchWriteItem",
         "dynamodb:BatchGetItem",
         "dynamodb:DescribeTable",

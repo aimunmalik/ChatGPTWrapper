@@ -18,6 +18,7 @@ from typing import Any
 
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 from anna_chat.http import (
     HttpError,
@@ -137,6 +138,18 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
             extra={"status": exc.status, "reason": exc.message},
         )
         return error(exc.status, exc.message)
+    except ClientError as exc:
+        # AWS error code (e.g. "AccessDeniedException") is PHI-safe — unlike
+        # the message, which can echo ARNs / resource names. Log the code so
+        # failures like this one are self-diagnosing.
+        logger.error(
+            "kb_unhandled_error",
+            extra={
+                "errorType": type(exc).__name__,
+                "awsErrorCode": exc.response.get("Error", {}).get("Code", ""),
+            },
+        )
+        return error(500, "internal error")
     except Exception as exc:
         logger.error(
             "kb_unhandled_error",
