@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 
 import type { KbDocument, KbSourceType, KbStatus } from "../api/kb";
+import type { BatchItem } from "../hooks/useKbDocuments";
 import { useKbDocuments } from "../hooks/useKbDocuments";
 
 interface Props {
@@ -10,7 +11,7 @@ interface Props {
   accessToken: string;
 }
 
-const TITLE_MAX = 200;
+const COLLECTION_MAX = 80;
 
 const SOURCE_TYPE_OPTIONS: { value: KbSourceType; label: string }[] = [
   { value: "research", label: "Research" },
@@ -21,88 +22,82 @@ const SOURCE_TYPE_OPTIONS: { value: KbSourceType; label: string }[] = [
 ];
 
 const ACCEPT = ".pdf,.docx,.txt,.csv";
+const UNGROUPED_LABEL = "Ungrouped";
 
 export function KnowledgeBase({ open, onClose, accessToken }: Props) {
-  const { documents, isLoading, error, upload, remove } = useKbDocuments({
-    accessToken,
-  });
+  const {
+    documents,
+    isLoading,
+    error,
+    batch,
+    batchUploading,
+    uploadMany,
+    remove,
+    collections,
+  } = useKbDocuments({ accessToken });
 
-  const [file, setFile] = useState<File | null>(null);
-  const [docTitle, setDocTitle] = useState("");
-  const [sourceType, setSourceType] = useState<KbSourceType>("training");
+  const [files, setFiles] = useState<File[]>([]);
+  const [collection, setCollection] = useState("");
+  const [sourceType, setSourceType] = useState<KbSourceType>("research");
   const [formError, setFormError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Reset the upload form whenever the modal closes so the next open is
-  // a clean slate. Keeps the already-uploaded doc list in place (it's a
-  // hook, not local state).
+  // Reset the upload form whenever the modal closes so the next open is a
+  // clean slate. Keeps the already-uploaded doc list in place (hook state).
   useEffect(() => {
     if (!open) {
-      setFile(null);
-      setDocTitle("");
-      setSourceType("training");
+      setFiles([]);
+      setCollection("");
+      setSourceType("research");
       setFormError(null);
-      setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }, [open]);
 
-  // Esc closes the modal — but only when we're not mid-upload, so the
-  // upload state machine doesn't get orphaned.
+  // Esc closes — but only when not mid-upload, so the batch state machine
+  // doesn't get orphaned.
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !uploading) {
+      if (e.key === "Escape" && !batchUploading) {
         e.preventDefault();
         onClose();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose, uploading]);
+  }, [open, onClose, batchUploading]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const picked = e.target.files?.[0] ?? null;
-    setFile(picked);
-    // Default docTitle to filename (sans extension) if the admin hasn't
-    // already typed something. Easy nudge without overwriting their edits.
-    if (picked && !docTitle.trim()) {
-      const base = picked.name.replace(/\.[^.]+$/, "");
-      setDocTitle(base.slice(0, TITLE_MAX));
-    }
+    const picked = Array.from(e.target.files ?? []);
+    setFiles(picked);
+  }
+
+  function removeStagedFile(idx: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
   }
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
 
-    if (!file) {
-      setFormError("Pick a file first.");
+    if (files.length === 0) {
+      setFormError("Pick one or more files first.");
       return;
     }
-    const title = docTitle.trim();
-    if (!title) {
-      setFormError("Title is required.");
-      return;
-    }
-    if (title.length > TITLE_MAX) {
-      setFormError(`Title must be ${TITLE_MAX} characters or fewer.`);
+    const col = collection.trim();
+    if (col.length > COLLECTION_MAX) {
+      setFormError(`Collection name must be ${COLLECTION_MAX} characters or fewer.`);
       return;
     }
 
-    setUploading(true);
-    try {
-      await upload({ file, docTitle: title, sourceType });
-      // Reset form on success; keep the modal open so admins can upload
-      // multiple docs in a row.
-      setFile(null);
-      setDocTitle("");
-      setSourceType("training");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    } finally {
-      setUploading(false);
-    }
+    await uploadMany({ files, collection: col, sourceType });
+
+    // Clear the staged files once the batch finishes — the live `batch`
+    // array from the hook keeps the visible per-file results. Don't clear
+    // the collection; admins often upload several waves into the same one.
+    setFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   async function handleDelete(doc: KbDocument) {
@@ -111,6 +106,27 @@ export function KnowledgeBase({ open, onClose, accessToken }: Props) {
     }
     await remove(doc.kbDocId);
   }
+
+  // Group the uploaded docs for display — by collection, newest first within
+  // each group, with "Ungrouped" pinned last.
+  const grouped = useMemo(() => {
+    const byKey = new Map<string, KbDocument[]>();
+    for (const doc of documents) {
+      const key = doc.collection || "";
+      const list = byKey.get(key) ?? [];
+      list.push(doc);
+      byKey.set(key, list);
+    }
+    const keys = Array.from(byKey.keys()).sort((a, b) => {
+      if (a === "" && b !== "") return 1;
+      if (b === "" && a !== "") return -1;
+      return a.localeCompare(b);
+    });
+    return keys.map((k) => ({
+      name: k || UNGROUPED_LABEL,
+      docs: (byKey.get(k) ?? []).sort((a, b) => b.createdAt - a.createdAt),
+    }));
+  }, [documents]);
 
   if (!open) return null;
 
@@ -142,33 +158,25 @@ export function KnowledgeBase({ open, onClose, accessToken }: Props) {
         <div className="kb-library__body">
           <form className="kb-library__form" onSubmit={handleUpload}>
             <label className="kb-library__field">
-              <span className="kb-library__field-label">File</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPT}
-                onChange={handleFileChange}
-                disabled={uploading}
-                className="kb-library__file-input"
-              />
-              <span className="kb-library__field-hint">
-                PDF, DOCX, TXT, or CSV — up to 100 MB
-              </span>
-            </label>
-
-            <label className="kb-library__field">
-              <span className="kb-library__field-label">Title</span>
+              <span className="kb-library__field-label">Collection</span>
               <input
                 type="text"
                 className="kb-library__input"
-                maxLength={TITLE_MAX}
-                value={docTitle}
-                onChange={(e) => setDocTitle(e.target.value)}
-                placeholder="e.g. ANNA Training Module 3"
-                disabled={uploading}
+                list="kb-existing-collections"
+                maxLength={COLLECTION_MAX}
+                value={collection}
+                onChange={(e) => setCollection(e.target.value)}
+                placeholder="e.g. NDBI Research"
+                disabled={batchUploading}
               />
+              <datalist id="kb-existing-collections">
+                {collections.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
               <span className="kb-library__field-hint">
-                {docTitle.length}/{TITLE_MAX}
+                All files in this batch go into this collection. Leave blank
+                for ungrouped.
               </span>
             </label>
 
@@ -178,7 +186,7 @@ export function KnowledgeBase({ open, onClose, accessToken }: Props) {
                 className="kb-library__input"
                 value={sourceType}
                 onChange={(e) => setSourceType(e.target.value as KbSourceType)}
-                disabled={uploading}
+                disabled={batchUploading}
               >
                 {SOURCE_TYPE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -186,7 +194,67 @@ export function KnowledgeBase({ open, onClose, accessToken }: Props) {
                   </option>
                 ))}
               </select>
+              <span className="kb-library__field-hint">
+                Applied to every file in this batch.
+              </span>
             </label>
+
+            <label className="kb-library__field">
+              <span className="kb-library__field-label">Files</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPT}
+                multiple
+                onChange={handleFileChange}
+                disabled={batchUploading}
+                className="kb-library__file-input"
+              />
+              <span className="kb-library__field-hint">
+                PDF, DOCX, TXT, or CSV — up to 100 MB each. Hold ⌘/Ctrl or
+                Shift to pick multiple.
+              </span>
+            </label>
+
+            {files.length > 0 && (
+              <ul className="kb-library__staged">
+                {files.map((f, i) => (
+                  <li key={`${f.name}-${i}`} className="kb-library__staged-item">
+                    <span className="kb-library__staged-name" title={f.name}>
+                      {f.name}
+                    </span>
+                    <span className="kb-library__staged-size">
+                      {(f.size / 1024 / 1024).toFixed(1)} MB
+                    </span>
+                    {!batchUploading && (
+                      <button
+                        type="button"
+                        className="kb-library__staged-remove"
+                        onClick={() => removeStagedFile(i)}
+                        aria-label={`Remove ${f.name}`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {batch.length > 0 && (
+              <div className="kb-library__batch">
+                <div className="kb-library__batch-title">
+                  {batchUploading
+                    ? `Uploading ${batch.filter((b) => b.status === "done").length}/${batch.length}…`
+                    : `Batch complete — ${batch.filter((b) => b.status === "done").length} done, ${batch.filter((b) => b.status === "error").length} failed`}
+                </div>
+                <ul className="kb-library__batch-list">
+                  {batch.map((b) => (
+                    <BatchRow key={b.clientId} item={b} />
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {formError && <div className="kb-library__error">{formError}</div>}
             {error && !formError && (
@@ -198,9 +266,13 @@ export function KnowledgeBase({ open, onClose, accessToken }: Props) {
               <button
                 type="submit"
                 className="btn btn--primary"
-                disabled={uploading || !file}
+                disabled={batchUploading || files.length === 0}
               >
-                {uploading ? "Uploading…" : "Upload"}
+                {batchUploading
+                  ? "Uploading…"
+                  : files.length > 1
+                    ? `Upload ${files.length} files`
+                    : "Upload"}
               </button>
             </div>
           </form>
@@ -218,11 +290,27 @@ export function KnowledgeBase({ open, onClose, accessToken }: Props) {
               CSV to make it available to Praxis.
             </div>
           ) : (
-            <ul className="kb-library__list">
-              {documents.map((d) => (
-                <KbDocRow key={d.kbDocId} doc={d} onDelete={handleDelete} />
+            <div className="kb-library__groups">
+              {grouped.map((g) => (
+                <section key={g.name} className="kb-library__group">
+                  <header className="kb-library__group-header">
+                    <span className="kb-library__group-name">{g.name}</span>
+                    <span className="kb-library__group-count">
+                      {g.docs.length}
+                    </span>
+                  </header>
+                  <ul className="kb-library__list">
+                    {g.docs.map((d) => (
+                      <KbDocRow
+                        key={d.kbDocId}
+                        doc={d}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </div>
@@ -261,6 +349,22 @@ function KbDocRow({ doc, onDelete }: RowProps) {
       >
         ×
       </button>
+    </li>
+  );
+}
+
+function BatchRow({ item }: { item: BatchItem }) {
+  return (
+    <li className={clsx("kb-library__batch-item", `kb-library__batch-item--${item.status}`)}>
+      <span className="kb-library__batch-name" title={item.file.name}>
+        {item.file.name}
+      </span>
+      <span className="kb-library__batch-status">
+        {item.status === "pending" && "Queued"}
+        {item.status === "uploading" && "Uploading…"}
+        {item.status === "done" && "Uploaded"}
+        {item.status === "error" && (item.error ?? "Failed")}
+      </span>
     </li>
   );
 }

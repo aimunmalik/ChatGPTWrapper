@@ -76,6 +76,50 @@ def test_create_doc_writes_meta_item_with_uploading_status():
     assert doc.totalChunks == 0
 
 
+def test_create_doc_includes_collection_when_nonempty():
+    repo, stub = _make_repo()
+    stub.add_response(
+        "put_item",
+        {},
+        expected_params={
+            "TableName": TABLE,
+            "Item": {
+                "kbDocId": "kd_abc",
+                "sk": "META",
+                "docTitle": "Paper 1",
+                "sourceType": "research",
+                "filename": "p1.pdf",
+                "contentType": "application/pdf",
+                "sizeBytes": 100,
+                "s3Key": "kb/kd_abc/p1.pdf",
+                "status": "uploading",
+                "statusMessage": "",
+                "totalChunks": 0,
+                "uploadedBy": "u_admin",
+                "collection": "NDBI Research",
+                "createdAt": _any_int(),
+                "updatedAt": _any_int(),
+            },
+        },
+    )
+    try:
+        doc = repo.create_doc(
+            user_id="u_admin",
+            kb_doc_id="kd_abc",
+            filename="p1.pdf",
+            content_type="application/pdf",
+            size_bytes=100,
+            s3_key="kb/kd_abc/p1.pdf",
+            doc_title="Paper 1",
+            source_type="research",
+            collection="NDBI Research",
+        )
+        stub.assert_no_pending_responses()
+    finally:
+        stub.deactivate()
+    assert doc.collection == "NDBI Research"
+
+
 def test_get_doc_returns_dataclass_with_ints_cast():
     repo, stub = _make_repo()
     stub.add_response(

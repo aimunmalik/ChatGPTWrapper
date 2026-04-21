@@ -53,6 +53,8 @@ ALLOWED_SOURCE_TYPES: frozenset[str] = frozenset(
 
 DOC_TITLE_MIN = 1
 DOC_TITLE_MAX = 200
+COLLECTION_MAX = 80
+_COLLECTION_BAD = re.compile(r"[\x00-\x1f]")  # strip control chars
 
 
 @lru_cache(maxsize=1)
@@ -96,6 +98,7 @@ def _doc_response(doc: Any) -> dict[str, Any]:
         "kbDocId": doc.kbDocId,
         "docTitle": doc.docTitle,
         "sourceType": doc.sourceType,
+        "collection": getattr(doc, "collection", "") or "",
         "filename": doc.filename,
         "contentType": doc.contentType,
         "sizeBytes": doc.sizeBytes,
@@ -142,12 +145,15 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
         return error(500, "internal error")
 
 
-def _validate_presign_body(body: dict[str, Any]) -> tuple[str, str, int, str, str]:
+def _validate_presign_body(
+    body: dict[str, Any],
+) -> tuple[str, str, int, str, str, str]:
     filename = (body.get("filename") or "").strip()
     content_type = (body.get("contentType") or "").strip()
     size_bytes = body.get("sizeBytes")
     doc_title_raw = body.get("docTitle")
     source_type = (body.get("sourceType") or "").strip()
+    collection_raw = body.get("collection")
 
     if not filename:
         raise HttpError(400, "filename is required")
@@ -165,14 +171,30 @@ def _validate_presign_body(body: dict[str, Any]) -> tuple[str, str, int, str, st
     if len(doc_title) > DOC_TITLE_MAX:
         raise HttpError(400, f"docTitle must be ≤{DOC_TITLE_MAX} chars")
 
-    return filename, content_type, size_bytes, doc_title, source_type
+    # Collection is optional. When present: strip control chars, trim, cap.
+    # Empty after normalization is treated the same as absent.
+    if collection_raw is None:
+        collection = ""
+    elif not isinstance(collection_raw, str):
+        raise HttpError(400, "collection must be a string")
+    else:
+        collection = _COLLECTION_BAD.sub("", collection_raw).strip()
+        if len(collection) > COLLECTION_MAX:
+            raise HttpError(400, f"collection must be ≤{COLLECTION_MAX} chars")
+
+    return filename, content_type, size_bytes, doc_title, source_type, collection
 
 
 def _presigned_upload(event: dict[str, Any], user: Any) -> dict[str, Any]:
     body = parse_json_body(event)
-    filename, content_type, size_bytes, doc_title, source_type = (
-        _validate_presign_body(body)
-    )
+    (
+        filename,
+        content_type,
+        size_bytes,
+        doc_title,
+        source_type,
+        collection,
+    ) = _validate_presign_body(body)
 
     settings = _settings()
     if size_bytes > settings.kb_max_size_bytes:
@@ -197,6 +219,7 @@ def _presigned_upload(event: dict[str, Any], user: Any) -> dict[str, Any]:
         s3_key=s3_key,
         doc_title=doc_title,
         source_type=source_type,
+        collection=collection,
     )
 
     upper = min(
@@ -225,6 +248,7 @@ def _presigned_upload(event: dict[str, Any], user: Any) -> dict[str, Any]:
             "sizeBytes": size_bytes,
             "contentType": content_type,
             "sourceType": source_type,
+            "hasCollection": bool(collection),
         },
     )
 

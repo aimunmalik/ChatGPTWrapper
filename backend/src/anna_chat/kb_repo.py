@@ -39,6 +39,9 @@ class KbDoc:
     updatedAt: int
     statusMessage: str = ""
     totalChunks: int = 0
+    # Free-form label that groups related docs in the admin UI (e.g.
+    # "NDBI Research", "Parent Orientation"). Empty string means ungrouped.
+    collection: str = ""
     tags: list[str] = field(default_factory=list)
 
 
@@ -110,6 +113,7 @@ class KbRepo:
             "statusMessage",
             "totalChunks",
             "uploadedBy",
+            "collection",
             "tags",
             "createdAt",
             "updatedAt",
@@ -163,6 +167,7 @@ class KbRepo:
         s3_key: str,
         doc_title: str,
         source_type: str,
+        collection: str = "",
     ) -> KbDoc:
         """Create the META item with status=uploading."""
         now_ms = self._now_ms()
@@ -177,6 +182,7 @@ class KbRepo:
             s3Key=s3_key,
             status="uploading",
             uploadedBy=user_id,
+            collection=collection,
             createdAt=now_ms,
             updatedAt=now_ms,
         )
@@ -185,6 +191,11 @@ class KbRepo:
         # the contract (it's a string set for later filtering).
         if not item.get("tags"):
             item.pop("tags", None)
+        # Drop `collection` when empty so a) we don't have a sparse index of
+        # empty strings and b) legacy rows (pre-collection) don't look
+        # different from brand-new ungrouped uploads.
+        if not item.get("collection"):
+            item.pop("collection", None)
         self._table.put_item(Item=item)
         return doc
 

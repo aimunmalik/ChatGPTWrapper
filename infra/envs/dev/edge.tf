@@ -1,13 +1,18 @@
 locals {
   cloudfront_url = module.edge.cloudfront_url
 
-  # Pin the CSP connect-src for S3 to exactly the attachments bucket rather
-  # than `*.s3.amazonaws.com`, which would let an XSS payload reach any
-  # S3 bucket the browser can reach. Both hostname forms are valid for the
-  # same bucket (virtual-hosted–style, global and regional), so we list both.
+  # Pin the CSP connect-src for S3 to exactly the attachments + KB buckets
+  # rather than `*.s3.amazonaws.com`, which would let an XSS payload reach
+  # any S3 bucket the browser can reach. Both hostname forms are valid for
+  # the same bucket (virtual-hosted–style, global and regional), so we list
+  # both for each bucket.
   _attachments_bucket = module.attachments.bucket_name
   _attachments_host_1 = "https://${local._attachments_bucket}.s3.amazonaws.com"
   _attachments_host_2 = "https://${local._attachments_bucket}.s3.${var.aws_region}.amazonaws.com"
+
+  _kb_bucket = module.kb.bucket_name
+  _kb_host_1 = "https://${local._kb_bucket}.s3.amazonaws.com"
+  _kb_host_2 = "https://${local._kb_bucket}.s3.${var.aws_region}.amazonaws.com"
 
   csp_connect_extra = join(" ", [
     "https://cognito-idp.${var.aws_region}.amazonaws.com",
@@ -16,6 +21,9 @@ locals {
     # Attachments bucket uploads (presigned POST from browser → S3).
     local._attachments_host_1,
     local._attachments_host_2,
+    # Knowledge-base bucket uploads (admin-only presigned POST).
+    local._kb_host_1,
+    local._kb_host_2,
   ])
 }
 

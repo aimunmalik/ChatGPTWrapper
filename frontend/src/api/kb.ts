@@ -24,6 +24,9 @@ export interface KbDocument {
   kbDocId: string;
   docTitle: string;
   sourceType: KbSourceType;
+  /** Free-form grouping label (e.g. "NDBI Research"). Empty string when
+   *  the doc was uploaded without a collection. */
+  collection: string;
   filename: string;
   sizeBytes: number;
   status: KbStatus;
@@ -39,6 +42,8 @@ export interface KbPresignedUploadRequest {
   sizeBytes: number;
   docTitle: string;
   sourceType: KbSourceType;
+  /** Optional collection. Empty / absent means ungrouped. */
+  collection?: string;
 }
 
 export interface KbPresignedUpload {
