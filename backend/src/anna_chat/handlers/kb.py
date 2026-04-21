@@ -36,6 +36,11 @@ configure_logging()
 logger = get_logger(__name__)
 
 PRESIGN_EXPIRY_SECONDS = 15 * 60
+# Short-lived GET URLs for the "open source" button. Deliberately tighter
+# than the upload window — the URL is requested at click time and the
+# browser navigates to it immediately; an admin leaking the link would
+# only have 5 minutes to abuse it.
+DOWNLOAD_EXPIRY_SECONDS = 5 * 60
 _FILENAME_SAFE = re.compile(r"[^A-Za-z0-9._-]")
 
 PDF_MIME = "application/pdf"
@@ -115,10 +120,18 @@ def _doc_response(doc: Any) -> dict[str, Any]:
 def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
     try:
         user = authenticate(event, _settings())
-        require_admin(user)
 
         route_key = event.get("routeKey", "")
         path_params = event.get("pathParameters") or {}
+
+        # Download is NOT admin-gated — clinicians need to open the source
+        # PDF Praxis cited in the chat reply, and they are not admins. All
+        # other KB admin routes remain admin-only.
+        if route_key == "GET /kb/documents/{kbDocId}/download":
+            kb_doc_id = path_params.get("kbDocId", "")
+            return _download(user, kb_doc_id)
+
+        require_admin(user)
 
         if route_key == "POST /kb/presigned-upload":
             return _presigned_upload(event, user)
@@ -271,6 +284,60 @@ def _presigned_upload(event: dict[str, Any], user: Any) -> dict[str, Any]:
             "uploadUrl": presigned["url"],
             "uploadFields": presigned["fields"],
             "expiresAt": expires_at_ms,
+        }
+    )
+
+
+def _download(user: Any, kb_doc_id: str) -> dict[str, Any]:
+    """Return a short-lived presigned GET URL for the underlying S3 object.
+
+    Available to any authenticated user — source pills on chat replies
+    need to be openable by clinicians, not just admins. We log every
+    download for the HIPAA access audit trail.
+    """
+    if not kb_doc_id:
+        raise HttpError(400, "kbDocId is required")
+    repo = _kb_repo()
+    doc = repo.get_doc(kb_doc_id)
+    if not doc:
+        raise HttpError(404, "document not found")
+
+    settings = _settings()
+    if not settings.kb_bucket:
+        raise HttpError(500, "kb storage not configured")
+
+    # Force the browser's PDF viewer / download UX to use the original
+    # filename rather than the sanitized S3 key tail.
+    response_content_disposition = f'inline; filename="{doc.filename}"'
+    url = _s3().generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": settings.kb_bucket,
+            "Key": doc.s3Key,
+            "ResponseContentDisposition": response_content_disposition,
+            "ResponseContentType": doc.contentType,
+        },
+        ExpiresIn=DOWNLOAD_EXPIRY_SECONDS,
+    )
+    expires_at_ms = int((time.time() + DOWNLOAD_EXPIRY_SECONDS) * 1000)
+
+    logger.info(
+        "kb_download",
+        extra={
+            "userId": user.sub,
+            "kbDocId": kb_doc_id,
+            "sourceType": doc.sourceType,
+        },
+    )
+
+    return ok(
+        {
+            "kbDocId": kb_doc_id,
+            "url": url,
+            "expiresAt": expires_at_ms,
+            "filename": doc.filename,
+            "docTitle": doc.docTitle,
+            "contentType": doc.contentType,
         }
     )
 

@@ -217,6 +217,7 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
         sources = [
             {
                 "index": i + 1,
+                "kbDocId": c.kb_doc_id,
                 "docTitle": c.doc_title,
                 "sourceType": c.source_type,
                 "pageNumber": c.page_number,

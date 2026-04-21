@@ -16,6 +16,8 @@ export interface ChatRequest {
  */
 export interface Source {
   index: number;
+  /** Points the download endpoint at the underlying PDF/DOCX/etc. */
+  kbDocId: string;
   docTitle: string;
   sourceType: string;
   pageNumber?: number;

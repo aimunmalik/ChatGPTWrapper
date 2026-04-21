@@ -80,6 +80,29 @@ export function deleteKbDocument(
   );
 }
 
+export interface KbDownloadUrl {
+  kbDocId: string;
+  url: string;
+  /** Millisecond epoch when the presigned URL stops working. ~5 min out. */
+  expiresAt: number;
+  filename: string;
+  docTitle: string;
+  contentType: string;
+}
+
+/** Fetch a short-lived presigned GET URL for the underlying source file.
+ *  Not admin-gated server-side — any authenticated user can open a source
+ *  Praxis cited in their chat reply. */
+export function getKbDownloadUrl(
+  accessToken: string,
+  kbDocId: string,
+): Promise<KbDownloadUrl> {
+  return apiFetch<KbDownloadUrl>(
+    `/kb/documents/${encodeURIComponent(kbDocId)}/download`,
+    accessToken,
+  );
+}
+
 /**
  * Directly POSTs a file to S3 using the presigned POST form. Does NOT use
  * apiFetch — S3 rejects the Authorization header on presigned uploads.

@@ -383,6 +383,13 @@ module "api" {
       lambda_function_name = module.lambda_kb.function_name
       lambda_invoke_arn    = module.lambda_kb.invoke_arn
     }
+    # Clinicians open KB source PDFs from chat replies via this route.
+    # Not admin-gated on the handler side — any authenticated user can
+    # pull a short-lived presigned GET URL.
+    "GET /kb/documents/{kbDocId}/download" = {
+      lambda_function_name = module.lambda_kb.function_name
+      lambda_invoke_arn    = module.lambda_kb.invoke_arn
+    }
   }
 
   tags = local.tags

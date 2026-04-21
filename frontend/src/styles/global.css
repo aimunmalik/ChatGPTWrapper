@@ -1245,26 +1245,45 @@ h1, h2, h3, h4, h5 {
 .message__source-pill {
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px;
+  padding: 4px 10px;
   font-size: 12px;
   line-height: 1.3;
   color: var(--c-text-muted);
   background: var(--c-primary-soft);
   border: 1px solid var(--c-border);
   border-radius: var(--radius-pill);
-  cursor: help;
+  cursor: pointer;
+  font-family: inherit;
   transition: background var(--dur-fast) var(--ease),
               border-color var(--dur-fast) var(--ease),
-              color var(--dur-fast) var(--ease);
+              color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease);
   max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.message__source-pill:hover {
-  background: rgba(255, 120, 150, 0.20);
+.message__source-pill:hover:not(:disabled) {
+  background: rgba(255, 120, 150, 0.25);
   border-color: var(--c-primary);
   color: var(--c-ink);
+}
+.message__source-pill:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.message__source-pill:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+}
+.message__source-pill:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.message__sources-error {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--c-danger);
+  padding: 4px 8px;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
