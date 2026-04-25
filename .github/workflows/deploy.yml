@@ -65,6 +65,14 @@ jobs:
         run: terraform apply -auto-approve -input=false
         env:
           TF_VAR_cognito_domain_suffix: ${{ vars.COGNITO_DOMAIN_SUFFIX }}
+          # Microsoft Entra (M365) federation. Tenant + client IDs are
+          # GitHub Variables (visible to anyone with repo read); client
+          # secret is a GitHub Secret (masked in logs, only injected at
+          # runtime). All three blank or unset → terraform skips creating
+          # the OIDC IdP and Cognito stays username/password + TOTP.
+          TF_VAR_entra_tenant_id:     ${{ vars.ENTRA_TENANT_ID }}
+          TF_VAR_entra_client_id:     ${{ vars.ENTRA_CLIENT_ID }}
+          TF_VAR_entra_client_secret: ${{ secrets.ENTRA_CLIENT_SECRET }}
 
       - name: Export terraform outputs
         id: tf
