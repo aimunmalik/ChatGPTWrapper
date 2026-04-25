@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Signed out · Praxis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <style>
+    /*
+     * Static post-logout landing. Lives outside the SPA on purpose:
+     * AuthProvider never mounts here, so oidc-client-ts can't silently
+     * re-authenticate via the still-alive M365 session. The user stays
+     * signed out until they explicitly click Sign in.
+     */
+    :root {
+      --c-bg:        #FFFFFF;
+      --c-surface:   #F7F7F8;
+      --c-border:    #E5E5E7;
+      --c-ink:       #111111;
+      --c-ink-muted: #6B6B70;
+      --c-brand:     #FF7896;
+      --c-brand-ink: #FFFFFF;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --c-bg:        #0F1116;
+        --c-surface:   #1A1D24;
+        --c-border:    #2A2E38;
+        --c-ink:       #ECECEF;
+        --c-ink-muted: #9A9AA3;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background: var(--c-bg);
+      color: var(--c-ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      padding: 48px 32px;
+      border: 1px solid var(--c-border);
+      border-radius: 16px;
+      background: var(--c-surface);
+    }
+    .logo {
+      width: 56px;
+      height: 56px;
+      margin-bottom: 16px;
+    }
+    .wordmark {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.01em;
+    }
+    .tagline {
+      color: var(--c-ink-muted);
+      margin: 0 0 32px 0;
+      font-size: 13px;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+    }
+    p {
+      color: var(--c-ink-muted);
+      font-size: 14px;
+      line-height: 1.5;
+      margin: 0 0 24px 0;
+    }
+    .btn {
+      display: inline-block;
+      background: var(--c-brand);
+      color: var(--c-brand-ink);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px 24px;
+      border-radius: 999px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: filter 120ms ease;
+    }
+    .btn:hover { filter: brightness(0.95); }
+    .btn:focus-visible {
+      outline: 2px solid var(--c-brand);
+      outline-offset: 3px;
+    }
+    .footnote {
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--c-ink-muted);
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <img src="/anna_logo.png" alt="" class="logo" />
+    <h1 class="wordmark">Praxis</h1>
+    <p class="tagline">by ANNA</p>
+    <h1>You're signed out</h1>
+    <p>Your Praxis session has ended. Your Microsoft 365 session in this browser is still active — clicking Sign in will resume immediately.</p>
+    <a class="btn" href="/">Sign in</a>
+    <p class="footnote">To sign out of Microsoft 365 itself, visit <a href="https://office.com" rel="noopener" style="color:inherit;">office.com</a> and sign out there.</p>
+  </main>
+</body>
+</html>

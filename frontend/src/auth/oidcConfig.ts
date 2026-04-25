@@ -35,14 +35,16 @@ export const oidcConfig: AuthProviderProps = {
 };
 
 export function buildLogoutUrl(idTokenHint?: string): string {
-  // Land back on /login?signedout=1 instead of root. The login page checks
-  // that flag and shows an explicit "Sign in" button instead of silently
-  // re-initiating the sign-in flow — otherwise the user gets bounced
-  // straight back into the app via SSO (their M365 session is still alive)
-  // and "sign out" appears to do nothing.
+  // Land on a STATIC HTML page (frontend/public/signed-out.html) that lives
+  // outside the SPA. The previous attempt to land on /login?signedout=1
+  // failed because react-oidc-context's AuthProvider re-mounts on every
+  // SPA load, and with the user's M365 session still alive in the browser
+  // it was triggering a silent OIDC iframe call to Cognito → Microsoft →
+  // back into Praxis without ever showing the signed-out UI. The static
+  // page never loads AuthProvider, so nothing can silently re-auth.
   const params = new URLSearchParams({
     client_id: config.cognitoClientId,
-    logout_uri: `${config.postLogoutRedirectUri}/login?signedout=1`,
+    logout_uri: `${config.postLogoutRedirectUri}/signed-out.html`,
   });
   if (idTokenHint) {
     params.set("id_token_hint", idTokenHint);

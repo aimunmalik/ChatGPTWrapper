@@ -50,13 +50,13 @@ variable "cognito_logout_urls" {
     "http://localhost:5173",
     "https://dr8xfgmss2sy0.cloudfront.net",
     "https://praxis.annaautismcare.com",
-    # /login?signedout=1 is what buildLogoutUrl now sends so the SPA can
-    # show a "you're signed out" page instead of immediately re-initiating
-    # the sign-in flow (which silently re-auths via SSO and makes sign-out
-    # appear to do nothing).
-    "http://localhost:5173/login?signedout=1",
-    "https://dr8xfgmss2sy0.cloudfront.net/login?signedout=1",
-    "https://praxis.annaautismcare.com/login?signedout=1",
+    # /signed-out.html is a STATIC page outside the SPA. buildLogoutUrl
+    # sends users here after Cognito clears the session. The static page
+    # has no JavaScript / AuthProvider, so the user's still-alive M365
+    # session can't silently re-authenticate them.
+    "http://localhost:5173/signed-out.html",
+    "https://dr8xfgmss2sy0.cloudfront.net/signed-out.html",
+    "https://praxis.annaautismcare.com/signed-out.html",
   ]
 }
 
