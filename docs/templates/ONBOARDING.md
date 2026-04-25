@@ -98,7 +98,37 @@ corresponding `require_group()` checks server-side.
 ## Scenario D: User leaves the org (offboarding)
 
 **Complete within 24 hours of their last day** — HIPAA Workforce Security
-requires prompt termination of access.
+requires prompt termination of access. The exact steps depend on whether
+the product uses Microsoft 365 SSO or local Cognito users.
+
+### D.1 — If the product uses M365 / Entra federation
+
+1. **Disable the user in Microsoft 365 first** (this is the source of
+   truth for federated identity):
+   - admin.microsoft.com → Users → Active users → find the user → click
+     the row → **Block sign-in** toggle → On.
+   - Or via PowerShell: `Set-MsolUser -UserPrincipalName <upn> -BlockCredential $true`.
+   - This stops any new sign-in to Praxis (or any M365-federated app).
+2. **Belt-and-suspenders: disable in Cognito too** so the existing
+   refresh token can't be used to silently renew the session in the
+   1-day window before it expires:
+   ```
+   aws cognito-idp admin-disable-user \
+     --user-pool-id <pool-id> --username <federated-username>
+   aws cognito-idp admin-user-global-sign-out \
+     --user-pool-id <pool-id> --username <federated-username>
+   ```
+   The federated username typically looks like `microsoft_<entra-oid>`
+   — list users to find it: `aws cognito-idp list-users --user-pool-id <pool-id>`.
+3. If they were a Praxis admin: remove from the `admins` group:
+   ```
+   aws cognito-idp admin-remove-user-from-group \
+     --user-pool-id <pool-id> --username <federated-username> \
+     --group-name admins
+   ```
+4. Continue with steps 5-6 below (audit + artifact recovery).
+
+### D.2 — If the product uses local Cognito users only (or for break-glass accounts)
 
 1. Cognito console → Users → find the user.
 2. **Disable** the user (don't delete — you may want audit continuity):
@@ -111,9 +141,10 @@ requires prompt termination of access.
    aws cognito-idp admin-user-global-sign-out \
      --user-pool-id <pool-id> --username <username>
    ```
-4. If they were an admin: remove from the `admins` group first (belt
-   and suspenders — disable blocks new sessions, but removing the group
-   also ensures any cached tokens can't authorize admin actions).
+4. If they were an admin: remove from the `admins` group.
+
+### D.3 — Common steps (both paths)
+
 5. **Review what they had access to:**
    - CloudWatch log search for `userId: <their-sub>` in the last 90 days.
    - Any AWS console access? IAM user for AWS? See separate IAM offboarding
