@@ -44,12 +44,19 @@ variable "cognito_callback_urls" {
 }
 
 variable "cognito_logout_urls" {
-  description = "Sign-out redirect URLs for the SPA."
+  description = "Sign-out redirect URLs for the SPA. Cognito requires EXACT match — query string and path included — so any logout_uri the SPA sends must appear in this list verbatim."
   type        = list(string)
   default = [
     "http://localhost:5173",
     "https://dr8xfgmss2sy0.cloudfront.net",
     "https://praxis.annaautismcare.com",
+    # /login?signedout=1 is what buildLogoutUrl now sends so the SPA can
+    # show a "you're signed out" page instead of immediately re-initiating
+    # the sign-in flow (which silently re-auths via SSO and makes sign-out
+    # appear to do nothing).
+    "http://localhost:5173/login?signedout=1",
+    "https://dr8xfgmss2sy0.cloudfront.net/login?signedout=1",
+    "https://praxis.annaautismcare.com/login?signedout=1",
   ]
 }
 

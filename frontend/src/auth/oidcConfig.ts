@@ -35,9 +35,14 @@ export const oidcConfig: AuthProviderProps = {
 };
 
 export function buildLogoutUrl(idTokenHint?: string): string {
+  // Land back on /login?signedout=1 instead of root. The login page checks
+  // that flag and shows an explicit "Sign in" button instead of silently
+  // re-initiating the sign-in flow — otherwise the user gets bounced
+  // straight back into the app via SSO (their M365 session is still alive)
+  // and "sign out" appears to do nothing.
   const params = new URLSearchParams({
     client_id: config.cognitoClientId,
-    logout_uri: config.postLogoutRedirectUri,
+    logout_uri: `${config.postLogoutRedirectUri}/login?signedout=1`,
   });
   if (idTokenHint) {
     params.set("id_token_hint", idTokenHint);
