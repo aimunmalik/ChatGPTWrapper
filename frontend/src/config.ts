@@ -6,6 +6,11 @@ export interface AppConfig {
   apiEndpoint: string;
   redirectUri: string;
   postLogoutRedirectUri: string;
+  /** Optional: when set, sign-in skips the Cognito picker page and goes
+   *  straight to this federated IdP (e.g. "Microsoft"). Leave unset
+   *  while the local username/password break-glass path is still in
+   *  active use. */
+  defaultIdp?: string;
 }
 
 function requireEnv(name: string): string {
@@ -28,6 +33,7 @@ export const config: AppConfig = {
   apiEndpoint: requireEnv("VITE_API_ENDPOINT").replace(/\/$/, ""),
   redirectUri: `${origin}/callback`,
   postLogoutRedirectUri: origin,
+  defaultIdp: (import.meta.env.VITE_DEFAULT_IDP as string | undefined) || undefined,
 };
 
 export const cognitoIssuer = `https://cognito-idp.${config.awsRegion}.amazonaws.com/${config.cognitoUserPoolId}`;

@@ -3,6 +3,15 @@ import type { AuthProviderProps } from "react-oidc-context";
 
 import { cognitoHostedUi, cognitoIssuer, config } from "../config";
 
+// When VITE_DEFAULT_IDP is set, oidc-client-ts forwards `identity_provider=<name>`
+// on the /oauth2/authorize redirect. Cognito then bypasses its picker UI and
+// bounces straight to that federated IdP (e.g. Microsoft Entra). Leave unset
+// to keep the picker visible — useful while local username/password is still
+// the break-glass path.
+const extraQueryParams = config.defaultIdp
+  ? { identity_provider: config.defaultIdp }
+  : undefined;
+
 export const oidcConfig: AuthProviderProps = {
   authority: cognitoIssuer,
   metadata: {
@@ -22,6 +31,7 @@ export const oidcConfig: AuthProviderProps = {
   loadUserInfo: false,
   automaticSilentRenew: true,
   userStore: new WebStorageStateStore({ store: window.localStorage }),
+  extraQueryParams,
 };
 
 export function buildLogoutUrl(idTokenHint?: string): string {

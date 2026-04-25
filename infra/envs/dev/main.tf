@@ -53,18 +53,29 @@ module "network" {
 }
 
 module "cognito" {
-  source                 = "../../modules/cognito"
-  env                    = var.env
-  domain_suffix          = var.cognito_domain_suffix
-  callback_urls          = var.cognito_callback_urls
-  logout_urls            = var.cognito_logout_urls
-  deletion_protection    = var.env == "prod"
+  source              = "../../modules/cognito"
+  env                 = var.env
+  domain_suffix       = var.cognito_domain_suffix
+  callback_urls       = var.cognito_callback_urls
+  logout_urls         = var.cognito_logout_urls
+  deletion_protection = var.env == "prod"
   # Tier B — flip dev from AUDIT (observe-only) to ENFORCED so impossible-
   # travel, credential-stuffing, and compromised-password detections actually
   # BLOCK risky sign-ins rather than just logging them. Extra ~$0.05/MAU +
   # $0.005/event — negligible for internal use.
   advanced_security_mode = "ENFORCED"
-  tags                   = local.tags
+
+  # Microsoft Entra (M365) federation. All three blank = federation off,
+  # username/password + TOTP only. When set, "Sign in with Microsoft"
+  # appears on the Hosted UI and ANNA's M365 tenant becomes the primary
+  # identity source. Local username/password stays available as the
+  # break-glass route. See docs/SETUP_M365_SSO.md for the Entra-side
+  # config steps that produce these values.
+  entra_tenant_id     = var.entra_tenant_id
+  entra_client_id     = var.entra_client_id
+  entra_client_secret = var.entra_client_secret
+
+  tags = local.tags
 }
 
 module "dynamodb" {

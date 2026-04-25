@@ -53,6 +53,37 @@ variable "cognito_logout_urls" {
   ]
 }
 
+# ──────────────────────────────────────────────────────────────────────────
+# Microsoft Entra (M365) federation — see docs/SETUP_M365_SSO.md
+#
+# All three values come from the Entra app registration. Tenant + client
+# IDs are not secret (visible to anyone with M365 admin); the client
+# secret is. Keep entra_client_secret in terraform.tfvars (gitignored)
+# OR set TF_VAR_entra_client_secret as a GitHub Actions Variable so it's
+# only ever in CI memory, never on disk.
+#
+# Leaving any one of these empty disables the federation entirely.
+# ──────────────────────────────────────────────────────────────────────────
+
+variable "entra_tenant_id" {
+  description = "Microsoft Entra tenant (directory) ID, e.g. 11111111-2222-3333-4444-555555555555."
+  type        = string
+  default     = ""
+}
+
+variable "entra_client_id" {
+  description = "Application (client) ID of the Entra app registration."
+  type        = string
+  default     = ""
+}
+
+variable "entra_client_secret" {
+  description = "Client secret value from the Entra app registration. Sensitive."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "cors_allow_origins" {
   description = "Origins allowed by API Gateway CORS. Includes local dev, CloudFront default domain, and the praxis.annaautismcare.com custom domain."
   type        = list(string)

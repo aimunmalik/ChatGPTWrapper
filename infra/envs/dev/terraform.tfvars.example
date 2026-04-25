@@ -19,3 +19,11 @@ cognito_logout_urls = [
 # VPC flow logs are expensive; off in dev by default.
 flow_logs_enabled  = false
 log_retention_days = 30
+
+# ──────────────────────────────────────────────────────────────────────
+# Microsoft Entra (M365) SSO — see docs/SETUP_M365_SSO.md
+# Leave blank to skip federation (Cognito stays username/password + TOTP).
+# ──────────────────────────────────────────────────────────────────────
+entra_tenant_id     = ""  # Entra app registration → Directory (tenant) ID
+entra_client_id     = ""  # Entra app registration → Application (client) ID
+entra_client_secret = ""  # Entra app registration → Certificates & secrets → Value

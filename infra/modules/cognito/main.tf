@@ -1,5 +1,20 @@
 locals {
   name_prefix = "anna-chat-${var.env}"
+
+  # Entra federation is gated on all three credentials being present. We
+  # avoid creating an OIDC IdP with placeholder values — Cognito accepts
+  # them silently and then breaks on first sign-in attempt.
+  entra_enabled = (
+    var.entra_tenant_id != ""
+    && var.entra_client_id != ""
+    && var.entra_client_secret != ""
+  )
+
+  # When Entra is enabled, the SPA client allows both COGNITO (local
+  # username/password — the break-glass path) and the federated provider.
+  # When disabled, only COGNITO. Order matters for the Hosted UI: COGNITO
+  # last so the federated button is visually primary.
+  supported_idps = local.entra_enabled ? [var.entra_provider_name, "COGNITO"] : ["COGNITO"]
 }
 
 resource "aws_cognito_user_pool" "this" {
@@ -85,6 +100,48 @@ resource "aws_cognito_user_pool_domain" "this" {
   user_pool_id = aws_cognito_user_pool.this.id
 }
 
+# ──────────────────────────────────────────────────────────────────────────
+# Microsoft Entra ID federation (created only when entra_* vars are set)
+#
+# Cognito acts as the OAuth client to Entra: user clicks "Sign in with
+# Microsoft" on the Hosted UI → bounce to login.microsoftonline.com →
+# user authenticates against ANNA's M365 tenant (with whatever MFA Entra
+# Conditional Access enforces) → bounce back to Cognito with an OIDC code
+# → Cognito exchanges code for tokens, provisions / refreshes a federated
+# user, and issues its own JWT to our SPA.
+#
+# OIDC discovery URL Cognito reads under the hood:
+#   https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration
+# Endpoints (authorize, token, jwks, userinfo) are auto-discovered from there.
+#
+# Attribute mapping: Entra issues `email` and `name` claims when the
+# `email` and `profile` scopes are granted in the app registration AND
+# the user has those values populated in M365. If `email` ever shows up
+# blank on a federated sign-in, check the app registration's "Optional
+# claims" blade and add `email` to the ID token.
+# ──────────────────────────────────────────────────────────────────────────
+
+resource "aws_cognito_identity_provider" "entra" {
+  count         = local.entra_enabled ? 1 : 0
+  user_pool_id  = aws_cognito_user_pool.this.id
+  provider_name = var.entra_provider_name
+  provider_type = "OIDC"
+
+  provider_details = {
+    client_id                 = var.entra_client_id
+    client_secret             = var.entra_client_secret
+    attributes_request_method = "GET"
+    oidc_issuer               = "https://login.microsoftonline.com/${var.entra_tenant_id}/v2.0"
+    authorize_scopes          = "openid profile email"
+  }
+
+  attribute_mapping = {
+    email    = "email"
+    name     = "name"
+    username = "sub"
+  }
+}
+
 resource "aws_cognito_user_pool_client" "spa" {
   name         = "${local.name_prefix}-spa"
   user_pool_id = aws_cognito_user_pool.this.id
@@ -98,7 +155,13 @@ resource "aws_cognito_user_pool_client" "spa" {
   callback_urls = var.callback_urls
   logout_urls   = var.logout_urls
 
-  supported_identity_providers = ["COGNITO"]
+  supported_identity_providers = local.supported_idps
+
+  # Force terraform to wait for the IdP resource to exist before adding
+  # its name to supported_identity_providers — otherwise the apply
+  # transiently fails with "InvalidParameterException: Identity provider
+  # not configured" because the client update races the IdP creation.
+  depends_on = [aws_cognito_identity_provider.entra]
 
   explicit_auth_flows = [
     "ALLOW_USER_SRP_AUTH",
