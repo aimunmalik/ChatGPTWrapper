@@ -66,6 +66,41 @@ def test_parse_blocks_numbered_list():
     assert blocks[2].text == "Tenth step"
 
 
+def test_parse_blocks_table_with_header_separator_and_rows():
+    body = (
+        "Lead paragraph.\n\n"
+        "| Channel | Audience | Frequency |\n"
+        "|---|---|---|\n"
+        "| Email | Existing families | Monthly |\n"
+        "| Instagram | Prospective | Weekly |\n\n"
+        "Closing paragraph."
+    )
+    blocks = _parse_blocks(body)
+    kinds = [b.kind for b in blocks]
+    assert kinds == ["paragraph", "table", "paragraph"]
+    table = blocks[1]
+    assert table.rows[0] == ("Channel", "Audience", "Frequency")
+    assert table.rows[1] == ("Email", "Existing families", "Monthly")
+    assert table.rows[2] == ("Instagram", "Prospective", "Weekly")
+
+
+def test_parse_blocks_table_handles_escaped_pipes_in_cells():
+    """Cell content with `\\|` must NOT be interpreted as a column boundary."""
+    body = "| Key | Value |\n|---|---|\n| Path | C:\\|Users\\|home |"
+    blocks = _parse_blocks(body)
+    assert len(blocks) == 1
+    assert blocks[0].kind == "table"
+    # The \| escapes resolve to a literal pipe inside the value cell.
+    assert blocks[0].rows[1][1] == "C:|Users|home"
+
+
+def test_parse_blocks_does_not_misread_stray_pipe_as_table():
+    """A line with pipes but no separator row is plain text, not a table."""
+    body = "Math: 2 | 4 means OR.\n\nNext paragraph."
+    blocks = _parse_blocks(body)
+    assert all(b.kind == "paragraph" for b in blocks)
+
+
 def test_parse_blocks_mixed_structure():
     body = (
         "# Title\n\n"
@@ -162,6 +197,26 @@ def test_build_docx_renders_bullets_with_list_style():
     assert len(bullet_paras) == 3
 
 
+def test_build_docx_renders_markdown_table_as_word_table():
+    body = (
+        "Outline:\n\n"
+        "| Channel | Frequency |\n"
+        "|---|---|\n"
+        "| Email | Monthly |\n"
+        "| Instagram | Weekly |"
+    )
+    raw = build_docx("Marketing Plan", body, target_language_code="es")
+    doc = Document(io.BytesIO(raw))
+    # python-docx exposes embedded tables on doc.tables.
+    assert len(doc.tables) == 1
+    table = doc.tables[0]
+    assert len(table.rows) == 3
+    assert len(table.columns) == 2
+    assert table.cell(0, 0).text == "Channel"
+    assert table.cell(0, 1).text == "Frequency"
+    assert table.cell(2, 0).text == "Instagram"
+
+
 def test_build_docx_renders_inline_bold():
     body = "This has a **bolded** word."
     raw = build_docx("Doc", body, target_language_code="es")
@@ -219,6 +274,19 @@ def test_build_pdf_escapes_html_like_tokens_in_body():
     body = "Notes: <patient> & <provider> discussed > 3 options."
     raw = build_pdf("Notes (Spanish)", body, target_language_code="es")
     assert raw[:5] == b"%PDF-"
+
+
+def test_build_pdf_renders_markdown_table_without_crashing():
+    body = (
+        "Plan:\n\n"
+        "| Channel | Audience | Frequency |\n"
+        "|---|---|---|\n"
+        "| Email | Existing families | Monthly |\n"
+        "| Instagram | Prospective | Weekly |"
+    )
+    raw = build_pdf("Marketing Plan", body, target_language_code="es")
+    assert raw[:5] == b"%PDF-"
+    assert b"%%EOF" in raw[-1024:]
 
 
 def test_build_pdf_renders_full_markdown_structure():

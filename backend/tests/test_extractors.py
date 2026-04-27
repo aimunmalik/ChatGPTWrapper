@@ -58,27 +58,53 @@ def test_extract_txt_truncates_at_max_bytes():
     assert len(result.text.encode("utf-8")) <= 100
 
 
-def test_extract_docx_reads_paragraphs_and_tables():
+def test_extract_docx_renders_paragraphs_and_tables_in_document_order():
+    """DOCX → text now interleaves paragraphs and tables in body order, and
+    renders tables as GitHub-flavored markdown so the translation pipeline
+    can preserve their structure end-to-end."""
     from docx import Document
 
     doc = Document()
     doc.add_paragraph("Hello from a paragraph")
-    doc.add_paragraph("Second paragraph")
     table = doc.add_table(rows=2, cols=2)
     table.rows[0].cells[0].text = "name"
     table.rows[0].cells[1].text = "value"
     table.rows[1].cells[0].text = "foo"
     table.rows[1].cells[1].text = "bar"
+    doc.add_paragraph("Trailing paragraph after the table")
     buf = io.BytesIO()
     doc.save(buf)
     data = buf.getvalue()
 
     result = extract(DOCX_MIME, data)
     assert "Hello from a paragraph" in result.text
-    assert "Second paragraph" in result.text
-    assert "name\tvalue" in result.text
-    assert "foo\tbar" in result.text
+    assert "Trailing paragraph after the table" in result.text
+    # Markdown table shape: header row, separator row, body rows.
+    assert "| name | value |" in result.text
+    assert "| --- | --- |" in result.text
+    assert "| foo | bar |" in result.text
+    # Order: paragraph appears before table, and trailing paragraph after.
+    pos_para = result.text.index("Hello from a paragraph")
+    pos_table = result.text.index("| name | value |")
+    pos_trailing = result.text.index("Trailing paragraph")
+    assert pos_para < pos_table < pos_trailing
     assert result.truncated is False
+
+
+def test_extract_docx_escapes_pipes_in_table_cells():
+    from docx import Document
+
+    doc = Document()
+    table = doc.add_table(rows=1, cols=2)
+    table.rows[0].cells[0].text = "Path"
+    table.rows[0].cells[1].text = "C:|home"  # literal pipe in cell content
+    buf = io.BytesIO()
+    doc.save(buf)
+    data = buf.getvalue()
+
+    result = extract(DOCX_MIME, data)
+    # The pipe in the cell value must be escaped so it doesn't tear the row apart.
+    assert "C:\\|home" in result.text
 
 
 def test_extract_xlsx_iterates_sheets_tab_separated():

@@ -241,19 +241,78 @@ def _extract_xlsx(data: bytes) -> str:
 
 
 def _extract_docx(data: bytes) -> str:
+    """Extract DOCX as plaintext WITH markdown tables in document order.
+
+    Tables are rendered as proper markdown tables (`| a | b |\\n|---|---|\\n
+    | 1 | 2 |`) so downstream consumers — particularly the translation
+    pipeline's renderer — can detect and preserve their structure. The
+    previous version dumped every paragraph then every table as
+    tab-separated rows, which both lost ordering and obliterated table
+    structure for any LLM consumer.
+
+    Iterates the document body element directly (not via doc.paragraphs)
+    because python-docx's high-level paragraph iterator skips tables.
+    """
     from docx import Document  # python-docx
+    from docx.oxml.ns import qn as _qn
+    from docx.table import Table as DocxTable
+    from docx.text.paragraph import Paragraph as DocxParagraph
 
     _guard_office_zip(data)
     doc = Document(io.BytesIO(data))
+
     parts: list[str] = []
-    for paragraph in doc.paragraphs:
-        if paragraph.text:
-            parts.append(paragraph.text)
-    for table in doc.tables:
-        for row in table.rows:
-            cells = [cell.text for cell in row.cells]
-            parts.append("\t".join(cells))
-    return "\n".join(parts)
+    body = doc.element.body
+    p_tag = _qn("w:p")
+    tbl_tag = _qn("w:tbl")
+    for child in body.iterchildren():
+        if child.tag == p_tag:
+            paragraph = DocxParagraph(child, doc)
+            text = paragraph.text
+            if text:
+                parts.append(text)
+        elif child.tag == tbl_tag:
+            table = DocxTable(child, doc)
+            md = _table_to_markdown(table)
+            if md:
+                parts.append(md)
+        # Other body children (sectPr, etc.) are skipped silently.
+    return "\n\n".join(parts)
+
+
+def _table_to_markdown(table) -> str:
+    """Render a python-docx Table as a GitHub-flavored markdown table.
+
+    Cells with embedded newlines have those collapsed to spaces — markdown
+    tables are inherently single-line-per-cell. Pipe and backslash chars
+    inside cells are escaped so the table doesn't tear apart on rendering.
+    """
+    rows: list[list[str]] = []
+    for row in table.rows:
+        cells = [_md_table_cell_escape(cell.text) for cell in row.cells]
+        rows.append(cells)
+    if not rows:
+        return ""
+    width = max(len(r) for r in rows)
+    # Pad short rows so every line has the same column count.
+    rows = [r + [""] * (width - len(r)) for r in rows]
+    header = "| " + " | ".join(rows[0]) + " |"
+    separator = "| " + " | ".join("---" for _ in range(width)) + " |"
+    body_lines = [
+        "| " + " | ".join(row) + " |" for row in rows[1:]
+    ]
+    return "\n".join([header, separator, *body_lines])
+
+
+def _md_table_cell_escape(text: str) -> str:
+    """Inline a markdown-table cell value: collapse newlines + escape pipes."""
+    if not text:
+        return ""
+    # Collapse internal newlines (markdown tables are single-line cells).
+    cleaned = text.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    # Escape backslashes first, then pipes — order matters.
+    cleaned = cleaned.replace("\\", "\\\\").replace("|", "\\|")
+    return cleaned.strip()
 
 
 def _extract_csv(data: bytes) -> str:

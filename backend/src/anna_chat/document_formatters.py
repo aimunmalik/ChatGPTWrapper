@@ -38,6 +38,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt
 from docx.text.paragraph import Paragraph as DocxParagraph
 from lxml import etree
+from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -48,6 +49,8 @@ from reportlab.platypus import (
     Paragraph,
     SimpleDocTemplate,
     Spacer,
+    Table as PdfTable,
+    TableStyle,
 )
 
 # ISO-639 codes whose scripts run right-to-left. Kept narrow on purpose.
@@ -68,26 +71,74 @@ _BULLET_RE = re.compile(r"^[-*•]\s+(.+)$")
 # ──────────────────────────────────────────────────────────────────────────
 
 
-BlockKind = Literal["h1", "h2", "bullet", "numbered", "paragraph"]
+BlockKind = Literal["h1", "h2", "bullet", "numbered", "paragraph", "table"]
 
 
 @dataclass(frozen=True)
 class Block:
     kind: BlockKind
-    text: str  # raw inline-markdown text; bold/italic spans are NOT yet expanded
+    text: str = ""
+    # Tables carry rows here instead of in `text`. Each row is a list of
+    # cell strings (raw inline-markdown; bold/italic NOT yet expanded).
+    # Convention: rows[0] is the header, rows[1:] are body rows.
+    rows: tuple[tuple[str, ...], ...] = ()
+
+
+_TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
+_TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$")
+
+
+def _split_table_row(line: str) -> list[str]:
+    """Split a markdown table row `| a | b\\| c |` into cells, honoring `\\|`.
+
+    Walks the string char by char so an escaped `\\|` inside a cell isn't
+    mistaken for a column boundary. Strips outer pipes and per-cell
+    whitespace; leaves backslash escapes resolved (`\\|` → `|`, `\\\\` → `\\`).
+    """
+    # Strip leading/trailing whitespace and the bordering pipes.
+    s = line.strip()
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|"):
+        s = s[:-1]
+    cells: list[str] = []
+    buf: list[str] = []
+    i = 0
+    n = len(s)
+    while i < n:
+        c = s[i]
+        if c == "\\" and i + 1 < n:
+            buf.append(s[i + 1])
+            i += 2
+            continue
+        if c == "|":
+            cells.append("".join(buf).strip())
+            buf = []
+            i += 1
+            continue
+        buf.append(c)
+        i += 1
+    cells.append("".join(buf).strip())
+    return cells
 
 
 def _parse_blocks(body: str) -> list[Block]:
     """Parse the markdown body into a flat list of typed blocks.
 
-    Headings, bullets, and numbered items are detected per-line. Adjacent
-    plain lines are coalesced into one paragraph (so a line wrap mid-
-    paragraph doesn't create extra blocks). Blank lines flush whatever
-    paragraph was being accumulated.
+    Recognized constructs (one block per match): h1 / h2 / bullet /
+    numbered / table / paragraph. Tables require the standard
+    GitHub-flavored two-line opener (header row + separator row) — a
+    line that LOOKS like a table row but isn't preceded by a separator
+    is treated as a paragraph, which is the right call: a stray pipe
+    in body text shouldn't fold into a phantom 1-row table.
+
+    Adjacent plain lines are coalesced into one paragraph. Blank lines
+    flush whatever paragraph was being accumulated.
     """
     if not body:
         return []
     norm = body.replace("\r\n", "\n").replace("\r", "\n")
+    lines = norm.split("\n")
     blocks: list[Block] = []
     para_lines: list[str] = []
 
@@ -99,31 +150,57 @@ def _parse_blocks(body: str) -> list[Block]:
             blocks.append(Block("paragraph", text))
         para_lines.clear()
 
-    for raw in norm.split("\n"):
-        line = raw.rstrip()
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i].rstrip()
         stripped = line.strip()
         if not stripped:
             flush_paragraph()
+            i += 1
+            continue
+        # Table: header row + separator row + zero or more body rows.
+        if (
+            _TABLE_ROW_RE.match(stripped)
+            and i + 1 < n
+            and _TABLE_SEP_RE.match(lines[i + 1].strip())
+        ):
+            flush_paragraph()
+            header = tuple(_split_table_row(stripped))
+            j = i + 2
+            body_rows: list[tuple[str, ...]] = []
+            while j < n and _TABLE_ROW_RE.match(lines[j].strip()):
+                body_rows.append(tuple(_split_table_row(lines[j].strip())))
+                j += 1
+            blocks.append(
+                Block("table", rows=(header, *tuple(body_rows)))
+            )
+            i = j
             continue
         if stripped.startswith("## "):
             flush_paragraph()
             blocks.append(Block("h2", stripped[3:].strip()))
+            i += 1
             continue
         if stripped.startswith("# "):
             flush_paragraph()
             blocks.append(Block("h1", stripped[2:].strip()))
+            i += 1
             continue
         bullet = _BULLET_RE.match(stripped)
         if bullet:
             flush_paragraph()
             blocks.append(Block("bullet", bullet.group(1).strip()))
+            i += 1
             continue
         numbered = _NUMBERED_RE.match(stripped)
         if numbered:
             flush_paragraph()
             blocks.append(Block("numbered", numbered.group(2).strip()))
+            i += 1
             continue
         para_lines.append(stripped)
+        i += 1
 
     flush_paragraph()
     return blocks
@@ -238,7 +315,7 @@ def _add_inline_runs(paragraph: DocxParagraph, text: str) -> None:
 
 
 def _docx_style_for(kind: BlockKind, doc: Document) -> str:
-    """Map a block kind to a python-docx built-in style name."""
+    """Map a paragraph-shaped block kind to a python-docx built-in style name."""
     return {
         "h1": "Heading 1",
         "h2": "Heading 2",
@@ -246,6 +323,36 @@ def _docx_style_for(kind: BlockKind, doc: Document) -> str:
         "numbered": "List Number",
         "paragraph": "Normal",
     }[kind]
+
+
+def _add_docx_table(doc: Document, block: Block, *, rtl: bool) -> None:
+    """Render a markdown-table Block as a real docx Table."""
+    if not block.rows:
+        return
+    cols = max(len(row) for row in block.rows)
+    table = doc.add_table(rows=len(block.rows), cols=cols)
+    # Built-in light grid style — visible borders, header band shading.
+    try:
+        table.style = doc.styles["Light Grid Accent 1"]
+    except KeyError:  # pragma: no cover — older Word doesn't ship this style
+        table.style = doc.styles["Table Grid"]
+
+    for r_idx, row_data in enumerate(block.rows):
+        row = table.rows[r_idx]
+        is_header = r_idx == 0
+        for c_idx in range(cols):
+            cell = row.cells[c_idx]
+            text = row_data[c_idx] if c_idx < len(row_data) else ""
+            # The cell starts with one empty paragraph; reuse it.
+            paragraph = cell.paragraphs[0]
+            paragraph.text = ""
+            _add_inline_runs(paragraph, text)
+            if is_header:
+                for run in paragraph.runs:
+                    run.bold = True
+            if rtl:
+                _mark_paragraph_rtl(paragraph)
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
 
 def build_docx(title: str, body: str, target_language_code: str) -> bytes:
@@ -269,6 +376,9 @@ def build_docx(title: str, body: str, target_language_code: str) -> bytes:
     doc.add_paragraph("")
 
     for block in _parse_blocks(body):
+        if block.kind == "table":
+            _add_docx_table(doc, block, rtl=rtl)
+            continue
         style_name = _docx_style_for(block.kind, doc)
         # Headings use add_heading so Word's outline mode picks them up.
         if block.kind in ("h1", "h2"):
@@ -302,6 +412,48 @@ def _pdf_escape(text: str) -> str:
         .replace("<", "&lt;")
         .replace(">", "&gt;")
     )
+
+
+def _build_pdf_table(
+    block: Block,
+    header_style: ParagraphStyle,
+    body_style: ParagraphStyle,
+) -> PdfTable:
+    """Render a markdown-table Block as a reportlab Table flowable.
+
+    Uses Paragraph cells (not raw strings) so inline bold/italic in cell
+    text gets honored. Auto-computes column widths from the available
+    page width so wide tables flow on Letter page-size.
+    """
+    if not block.rows:
+        return PdfTable([[""]])  # never reached — _parse_blocks won't emit empty
+    cols = max(len(row) for row in block.rows)
+    available_width = LETTER[0] - 2 * inch
+    col_width = available_width / max(cols, 1)
+    data: list[list[Paragraph]] = []
+    for r_idx, row in enumerate(block.rows):
+        style = header_style if r_idx == 0 else body_style
+        rendered_row = [
+            Paragraph(_inline_to_xml(cell), style)
+            for cell in row
+        ]
+        # Pad short rows so every line has the same column count.
+        while len(rendered_row) < cols:
+            rendered_row.append(Paragraph("", style))
+        data.append(rendered_row)
+    table = PdfTable(data, colWidths=[col_width] * cols, repeatRows=1)
+    table.setStyle(
+        TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#999999")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F2F2")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ])
+    )
+    return table
 
 
 def _inline_to_xml(text: str) -> str:
@@ -422,7 +574,24 @@ def build_pdf(title: str, body: str, target_language_code: str) -> bytes:
             )
             pending_numbers.clear()
 
+    cell_style = ParagraphStyle(
+        "TranslateCell",
+        parent=body_style,
+        spaceAfter=0,
+        leading=13,
+    )
+    cell_header_style = ParagraphStyle(
+        "TranslateCellHeader",
+        parent=cell_style,
+        fontName="Helvetica-Bold",
+    )
+
     for block in _parse_blocks(body):
+        if block.kind == "table":
+            flush_bullets()
+            flush_numbers()
+            flowables.append(_build_pdf_table(block, cell_header_style, cell_style))
+            continue
         rendered = _inline_to_xml(block.text)
         if block.kind == "bullet":
             flush_numbers()
