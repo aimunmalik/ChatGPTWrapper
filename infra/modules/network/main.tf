@@ -102,6 +102,11 @@ locals {
     # until the Lambda times out — the VPC has no NAT gateway by design
     # (HIPAA: no egress), so DNS resolves but the socket never connects.
     "textract",
+    # Lambda is needed for the translate handler's async InvocationType=Event
+    # call to fire off the worker. Same hang-until-timeout failure mode as
+    # Textract above when the endpoint is missing. Any Lambda that calls
+    # boto3.client("lambda").invoke(...) from inside the VPC needs this.
+    "lambda",
   ]
 }
 
