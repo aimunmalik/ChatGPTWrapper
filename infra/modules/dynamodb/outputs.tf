@@ -22,3 +22,13 @@ output "messages_user_index_arn" {
   description = "ARN of the userId-sortKey GSI on messages."
   value       = "${aws_dynamodb_table.messages.arn}/index/userId-sortKey-index"
 }
+
+output "jobs_table_name" {
+  description = "Name of the translation jobs table."
+  value       = aws_dynamodb_table.jobs.name
+}
+
+output "jobs_table_arn" {
+  description = "ARN of the translation jobs table."
+  value       = aws_dynamodb_table.jobs.arn
+}

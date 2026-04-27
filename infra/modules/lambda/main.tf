@@ -135,6 +135,20 @@ data "aws_iam_policy_document" "inline" {
       resources = ["*"]
     }
   }
+
+  dynamic "statement" {
+    for_each = length(var.lambda_invoke_function_arns) > 0 ? [1] : []
+    content {
+      # Async fan-out (InvocationType=Event) to a worker Lambda. Scoped to
+      # the specific worker ARNs the caller passes — never wildcard.
+      sid    = "LambdaInvoke"
+      effect = "Allow"
+      actions = [
+        "lambda:InvokeFunction",
+      ]
+      resources = var.lambda_invoke_function_arns
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "inline" {

@@ -19,6 +19,8 @@ class Settings:
     kb_table: str
     kb_bucket: str
     kb_max_size_bytes: int
+    jobs_table: str
+    translate_worker_function_name: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -46,5 +48,9 @@ class Settings:
             kb_bucket=os.environ.get("KB_BUCKET", ""),
             kb_max_size_bytes=int(
                 os.environ.get("KB_MAX_SIZE_BYTES", str(100 * 1024 * 1024))
+            ),
+            jobs_table=os.environ.get("JOBS_TABLE", ""),
+            translate_worker_function_name=os.environ.get(
+                "TRANSLATE_WORKER_FUNCTION_NAME", ""
             ),
         )

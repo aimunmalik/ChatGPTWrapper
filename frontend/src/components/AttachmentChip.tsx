@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 
 import type { Attachment } from "../api/attachments";
@@ -5,6 +6,11 @@ import type { Attachment } from "../api/attachments";
 interface Props {
   attachment: Attachment;
   onRemove: (id: string) => void;
+  /** Optional — when present, an overflow `⋯` button appears with a
+   *  "Translate…" entry that calls this on click. Hidden entirely when
+   *  unset so the chip stays minimal in any context that doesn't wire
+   *  translation up (e.g. future read-only views). */
+  onTranslate?: () => void;
   compact?: boolean;
 }
 
@@ -25,9 +31,46 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-export function AttachmentChip({ attachment, onRemove, compact }: Props) {
+export function AttachmentChip({
+  attachment,
+  onRemove,
+  onTranslate,
+  compact,
+}: Props) {
   const { status, statusMessage, filename, sizeBytes, attachmentId } = attachment;
   const canRemove = status === "ready" || status === "error";
+  // Translation only makes sense once extraction has produced text. We
+  // still render the menu item in other states with a disabled hint so
+  // users discover the affordance, but actually firing the dialog is
+  // gated to ready-only.
+  const canTranslate = Boolean(onTranslate) && status === "ready";
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close the popover on outside click / Esc. Wired only while it's open
+  // so we don't leak global listeners on every chip in the tray.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      const node = menuRef.current;
+      if (node && !node.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handleClick);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [menuOpen]);
 
   return (
     <div
@@ -53,6 +96,44 @@ export function AttachmentChip({ attachment, onRemove, compact }: Props) {
         {status === "ready" && "Ready"}
         {status === "error" && "Failed"}
       </span>
+      {onTranslate && (
+        <div className="attachment-chip__menu" ref={menuRef}>
+          <button
+            type="button"
+            className="attachment-chip__menu-btn"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={`More actions for ${filename}`}
+          >
+            ⋯
+          </button>
+          {menuOpen && (
+            <div
+              className="attachment-chip__menu-popover"
+              role="menu"
+            >
+              <button
+                type="button"
+                className="attachment-chip__menu-item"
+                role="menuitem"
+                disabled={!canTranslate}
+                title={
+                  canTranslate
+                    ? "Translate this document"
+                    : "Available once the document finishes processing"
+                }
+                onClick={() => {
+                  setMenuOpen(false);
+                  onTranslate?.();
+                }}
+              >
+                Translate…
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {canRemove && (
         <button
           type="button"

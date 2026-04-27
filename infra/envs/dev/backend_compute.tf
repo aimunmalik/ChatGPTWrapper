@@ -2,20 +2,22 @@ locals {
   lambda_zip_path = "${path.module}/../../../backend/lambda.zip"
 
   lambda_env = {
-    COGNITO_USER_POOL_ID       = module.cognito.user_pool_id
-    COGNITO_SPA_CLIENT_ID      = module.cognito.spa_client_id
-    CONVERSATIONS_TABLE        = module.dynamodb.conversations_table_name
-    MESSAGES_TABLE             = module.dynamodb.messages_table_name
-    ATTACHMENTS_TABLE          = module.attachments.table_name
-    ATTACHMENTS_BUCKET         = module.attachments.bucket_name
-    ATTACHMENTS_MAX_SIZE_BYTES = "52428800"
-    ATTACHMENTS_MAX_TEXT_BYTES = "512000"
-    BEDROCK_MODEL_ID           = var.bedrock_model_id
-    MESSAGE_TTL_DAYS           = tostring(var.message_ttl_days)
-    PROMPTS_TABLE              = module.prompts.table_name
-    KB_TABLE                   = module.kb.table_name
-    KB_BUCKET                  = module.kb.bucket_name
-    KB_MAX_SIZE_BYTES          = "104857600"
+    COGNITO_USER_POOL_ID           = module.cognito.user_pool_id
+    COGNITO_SPA_CLIENT_ID          = module.cognito.spa_client_id
+    CONVERSATIONS_TABLE            = module.dynamodb.conversations_table_name
+    MESSAGES_TABLE                 = module.dynamodb.messages_table_name
+    ATTACHMENTS_TABLE              = module.attachments.table_name
+    ATTACHMENTS_BUCKET             = module.attachments.bucket_name
+    ATTACHMENTS_MAX_SIZE_BYTES     = "52428800"
+    ATTACHMENTS_MAX_TEXT_BYTES     = "512000"
+    BEDROCK_MODEL_ID               = var.bedrock_model_id
+    MESSAGE_TTL_DAYS               = tostring(var.message_ttl_days)
+    PROMPTS_TABLE                  = module.prompts.table_name
+    KB_TABLE                       = module.kb.table_name
+    KB_BUCKET                      = module.kb.bucket_name
+    KB_MAX_SIZE_BYTES              = "104857600"
+    JOBS_TABLE                     = module.dynamodb.jobs_table_name
+    TRANSLATE_WORKER_FUNCTION_NAME = "anna-chat-${var.env}-translate-worker"
   }
 
   bedrock_model_arns = [
@@ -314,6 +316,95 @@ module "lambda_kb" {
   tags = local.tags
 }
 
+# ──────────────────────────────────────────────────────────────────────────
+# Phase 8: document translation jobs
+# ──────────────────────────────────────────────────────────────────────────
+
+# Synchronous handler for translation routes. Creates job rows, async-invokes
+# the worker, lists/polls jobs, and mints presigned download URLs for finished
+# outputs. Lightweight — no Bedrock, no heavy I/O.
+module "lambda_translate" {
+  source = "../../modules/lambda"
+
+  function_name   = "anna-chat-${var.env}-translate"
+  handler         = "anna_chat.handlers.translate.handler"
+  zip_path        = local.lambda_zip_path
+  timeout_seconds = 15
+  memory_mb       = 512
+
+  environment_variables = merge(local.lambda_env, {
+    AWS_LAMBDA_LOG_FORMAT = "JSON"
+  })
+
+  log_retention_days = var.log_retention_days
+  logs_kms_key_arn   = module.kms_logs.key_arn
+
+  vpc_id         = module.network.vpc_id
+  vpc_cidr       = module.network.vpc_cidr
+  vpc_subnet_ids = module.network.private_subnet_ids
+
+  # Jobs table for CRUD + polling. Attachments table for ownership /
+  # readiness checks before kicking off a job.
+  dynamodb_table_arns = [
+    module.dynamodb.jobs_table_arn,
+    module.attachments.table_arn,
+  ]
+  kms_key_arns = [module.kms_dynamodb.key_arn, module.kms_s3.key_arn]
+  # GetObject only — handler presigns downloads of translation outputs that
+  # the worker wrote under the translations/ prefix of the attachments bucket.
+  s3_bucket_arns = [module.attachments.bucket_arn]
+  # Async fan-out to the worker on POST /translate/jobs.
+  lambda_invoke_function_arns = [module.lambda_translate_worker.function_arn]
+
+  tags = local.tags
+}
+
+# Background worker for translation jobs. Long timeout (AWS hard cap) +
+# extra memory because Bedrock chunked translation, python-docx and reportlab
+# rendering all happen in a single invocation. Reads source text from the
+# attachments DDB row (already extracted by lambda_extract), writes outputs
+# to s3://attachments/translations/{jobId}/.
+module "lambda_translate_worker" {
+  source = "../../modules/lambda"
+
+  function_name   = "anna-chat-${var.env}-translate-worker"
+  handler         = "anna_chat.handlers.translate_worker.handler"
+  zip_path        = local.lambda_zip_path
+  timeout_seconds = 900
+  memory_mb       = 2048
+
+  environment_variables = merge(local.lambda_env, {
+    AWS_LAMBDA_LOG_FORMAT = "JSON"
+  })
+
+  log_retention_days = var.log_retention_days
+  logs_kms_key_arn   = module.kms_logs.key_arn
+
+  vpc_id         = module.network.vpc_id
+  vpc_cidr       = module.network.vpc_cidr
+  vpc_subnet_ids = module.network.private_subnet_ids
+
+  # RW on jobs (status transitions, output keys), R+ownership on attachments.
+  # The lambda module's DDB statement is RW across all listed ARNs — safe
+  # here because the worker is the only thing that should mutate jobs and
+  # the only attachment writes it'd attempt would be no-ops.
+  dynamodb_table_arns = [
+    module.dynamodb.jobs_table_arn,
+    module.attachments.table_arn,
+  ]
+  kms_key_arns = [
+    module.kms_dynamodb.key_arn,
+    module.kms_s3.key_arn,
+  ]
+  # Source text comes from DDB; S3 RW here is for writing translation
+  # artifacts (and a harmless safety net for reading original sources if a
+  # future iteration wants to).
+  s3_bucket_arns     = [module.attachments.bucket_arn]
+  bedrock_model_arns = local.bedrock_model_arns
+
+  tags = local.tags
+}
+
 module "api" {
   source = "../../modules/api"
 
@@ -389,6 +480,24 @@ module "api" {
     "GET /kb/documents/{kbDocId}/download" = {
       lambda_function_name = module.lambda_kb.function_name
       lambda_invoke_arn    = module.lambda_kb.invoke_arn
+    }
+    # Translation jobs — see docs/TRANSLATE_CONTRACT.md. Worker Lambda is
+    # invoked async by the handler, not via API Gateway.
+    "POST /translate/jobs" = {
+      lambda_function_name = module.lambda_translate.function_name
+      lambda_invoke_arn    = module.lambda_translate.invoke_arn
+    }
+    "GET /translate/jobs" = {
+      lambda_function_name = module.lambda_translate.function_name
+      lambda_invoke_arn    = module.lambda_translate.invoke_arn
+    }
+    "GET /translate/jobs/{jobId}" = {
+      lambda_function_name = module.lambda_translate.function_name
+      lambda_invoke_arn    = module.lambda_translate.invoke_arn
+    }
+    "GET /translate/jobs/{jobId}/download/{format}" = {
+      lambda_function_name = module.lambda_translate.function_name
+      lambda_invoke_arn    = module.lambda_translate.invoke_arn
     }
   }
 

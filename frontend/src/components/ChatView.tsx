@@ -2,13 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { postChat } from "../api/chat";
 import type { Source } from "../api/chat";
+import type { Attachment } from "../api/attachments";
 import type { MessageSummary } from "../api/conversations";
+import type { TranslateLanguage } from "../api/translate";
 import { useAttachmentUpload } from "../hooks/useAttachmentUpload";
+import { useTranslateJobs } from "../hooks/useTranslateJobs";
 import { AttachmentChip } from "./AttachmentChip";
 import { AttachmentPicker } from "./AttachmentPicker";
+import { JobCard } from "./JobCard";
 import { DEFAULT_MODEL, ModelPicker } from "./ModelPicker";
 import { Message } from "./Message";
 import { MessagesSkeleton } from "./Skeleton";
+import { TranslateDialog } from "./TranslateDialog";
 
 const MODEL_STORAGE_KEY = "anna-chat:model";
 
@@ -55,6 +60,17 @@ export function ChatView({
     conversationId,
     onConversationCreated,
   });
+
+  const {
+    jobs: translateJobs,
+    createJob: createTranslateJob,
+    dismissJob: dismissTranslateJob,
+    updateJob: updateTranslateJob,
+  } = useTranslateJobs({ accessToken });
+
+  // Translation modal state. translateTarget is the chip the user opened
+  // the dialog from; null means the dialog is closed.
+  const [translateTarget, setTranslateTarget] = useState<Attachment | null>(null);
 
   useEffect(() => {
     window.localStorage.setItem(MODEL_STORAGE_KEY, model);
@@ -166,11 +182,31 @@ export function ChatView({
     }
   }
 
+  const handleTranslateSubmit = async (
+    attachmentId: string,
+    targetLanguage: TranslateLanguage,
+  ) => {
+    return createTranslateJob({ attachmentId, targetLanguage });
+  };
+
   return (
     <section className="chat">
       <div className="chat__toolbar">
         <ModelPicker value={model} onChange={setModel} disabled={sending} />
       </div>
+      {translateJobs.length > 0 && (
+        <div className="chat__job-cards">
+          {translateJobs.map((j) => (
+            <JobCard
+              key={j.jobId}
+              job={j}
+              accessToken={accessToken}
+              onJobUpdated={updateTranslateJob}
+              onDismiss={() => dismissTranslateJob(j.jobId)}
+            />
+          ))}
+        </div>
+      )}
       <div className="chat__messages">
         {loading && <MessagesSkeleton />}
         {!loading && displayed.length === 0 && (
@@ -211,9 +247,30 @@ export function ChatView({
               key={a.attachmentId}
               attachment={a}
               onRemove={removeAttachment}
+              onTranslate={() => setTranslateTarget(a)}
             />
           ))}
         </div>
+      )}
+
+      {translateTarget && (
+        <TranslateDialog
+          open={translateTarget !== null}
+          onClose={() => setTranslateTarget(null)}
+          attachment={translateTarget}
+          accessToken={accessToken}
+          onSubmit={handleTranslateSubmit}
+          onJobCreated={() => {
+            // Hook already appended the JobCard; nothing else to do here.
+          }}
+          // The "View past translations →" link routes through a global
+          // event so ChatPage (which owns the RecentTranslations modal,
+          // alongside other library modals like KnowledgeBase) can open
+          // it without prop-drilling.
+          onOpenRecent={() => {
+            window.dispatchEvent(new Event("praxis:open-recent-translations"));
+          }}
+        />
       )}
 
       <form

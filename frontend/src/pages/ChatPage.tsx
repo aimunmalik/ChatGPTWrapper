@@ -8,6 +8,7 @@ import { KnowledgeBase } from "../components/KnowledgeBase";
 import { Layout } from "../components/Layout";
 import { MODEL_OPTIONS } from "../components/ModelPicker";
 import { PromptLibrary } from "../components/PromptLibrary";
+import { RecentTranslations } from "../components/RecentTranslations";
 import { Sidebar } from "../components/Sidebar";
 import type { Conversation, MessageSummary } from "../api/conversations";
 import {
@@ -37,6 +38,7 @@ export function ChatPage() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
   const [kbOpen, setKbOpen] = useState(false);
+  const [recentTranslationsOpen, setRecentTranslationsOpen] = useState(false);
 
   const {
     prompts: userPrompts,
@@ -97,6 +99,16 @@ export function ChatPage() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // The TranslateDialog footer link dispatches this event so children of
+  // ChatView can ask the page-level RecentTranslations modal to open
+  // without prop-drilling. Same pattern as praxis:insert-prompt.
+  useEffect(() => {
+    const handler = () => setRecentTranslationsOpen(true);
+    window.addEventListener("praxis:open-recent-translations", handler);
+    return () =>
+      window.removeEventListener("praxis:open-recent-translations", handler);
   }, []);
 
   const handleNewChat = useCallback(() => {
@@ -209,6 +221,16 @@ export function ChatPage() {
         keywords: "prompts library manage",
         onRun: () => setPromptLibraryOpen(true),
       },
+      // Translation history is per-user, NOT admin-gated — every signed-in
+      // user can translate their own documents and review their history.
+      {
+        id: "recent-translations",
+        label: "Recent translations…",
+        group: "Library",
+        hint: "View your last 50 translation jobs and download the outputs",
+        keywords: "translate translation translations language history docs",
+        onRun: () => setRecentTranslationsOpen(true),
+      },
       // Admin-only: KB management. Conditional spread keeps the entry out
       // of the command palette entirely for non-admins — the palette itself
       // stays visible to everyone.
@@ -281,6 +303,11 @@ export function ChatPage() {
       <KnowledgeBase
         open={kbOpen}
         onClose={() => setKbOpen(false)}
+        accessToken={accessToken}
+      />
+      <RecentTranslations
+        open={recentTranslationsOpen}
+        onClose={() => setRecentTranslationsOpen(false)}
         accessToken={accessToken}
       />
     </>

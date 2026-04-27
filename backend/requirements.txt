@@ -13,3 +13,7 @@ pypdf==5.1.0
 # XXE / billion-laughs hardening for openpyxl + python-docx (both call into
 # stdlib/lxml XML parsers). defuse_stdlib() is called at import time.
 defusedxml==0.7.1
+# PDF generation for the translation feature (docs/TRANSLATE_CONTRACT.md).
+# python-docx already on board for the .docx side; reportlab handles .pdf
+# rendering with platypus flowables — pure Python, no native deps.
+reportlab==4.2.5

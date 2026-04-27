@@ -1760,3 +1760,530 @@ h1, h2, h3, h4, h5 {
   background: var(--c-surface);
   border: 1px solid var(--c-border);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Attachment chip overflow menu (Phase 8 — translate)
+   The `⋯` button + popover that exposes per-attachment actions like
+   "Translate…". Lives inside the existing .attachment-chip flexbox row.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.attachment-chip__menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.attachment-chip__menu-btn {
+  border: 0;
+  background: transparent;
+  color: var(--c-text-subtle);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  transition: color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+}
+.attachment-chip__menu-btn:hover,
+.attachment-chip__menu-btn[aria-expanded="true"] {
+  color: var(--c-ink);
+  background: var(--c-surface-soft);
+}
+
+.attachment-chip__menu-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+  padding: 4px;
+  z-index: 20;
+  animation: fadein var(--dur-fast) var(--ease);
+}
+.attachment-chip__menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--c-text);
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.attachment-chip__menu-item:hover:not(:disabled) {
+  background: var(--c-primary-soft);
+  color: var(--c-ink);
+}
+.attachment-chip__menu-item:disabled {
+  color: var(--c-text-subtle);
+  cursor: not-allowed;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Translate dialog (Phase 8)
+   Reuses .cmdk-overlay + .cmdk-panel for the modal shell. All
+   translate-specific classes are prefixed .translate-dialog__*.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.translate-dialog .translate-dialog__panel {
+  width: min(92vw, 520px);
+  display: flex;
+  flex-direction: column;
+}
+
+.translate-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--c-border);
+}
+.translate-dialog__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-ink);
+  letter-spacing: -0.01em;
+}
+.translate-dialog__close {
+  border: 0;
+  background: transparent;
+  color: var(--c-text-muted);
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.translate-dialog__close:hover:not(:disabled) {
+  background: var(--c-surface-soft);
+  color: var(--c-ink);
+}
+.translate-dialog__close:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.translate-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+
+.translate-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.translate-dialog__field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.translate-dialog__field-hint {
+  font-size: 11.5px;
+  color: var(--c-text-subtle);
+}
+
+.translate-dialog__input {
+  width: 100%;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--c-surface);
+  color: var(--c-text);
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+.translate-dialog__input:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px var(--c-primary-soft);
+}
+.translate-dialog__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.translate-dialog__input--readonly {
+  background: var(--c-surface-soft);
+  color: var(--c-text-muted);
+  cursor: default;
+}
+
+.translate-dialog__error {
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--c-danger);
+  font-size: 13px;
+}
+
+.translate-dialog__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+.translate-dialog__actions-spacer { flex: 1; }
+
+.translate-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 6px;
+  border-top: 1px solid var(--c-border);
+  margin-top: 8px;
+}
+.translate-dialog__footer-link {
+  border: 0;
+  background: transparent;
+  color: var(--c-primary);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 6px 0;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
+}
+.translate-dialog__footer-link:hover:not(:disabled) {
+  color: var(--c-primary-hover);
+  text-decoration: underline;
+}
+.translate-dialog__footer-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Job card (Phase 8 — translate)
+   Inline status card rendered above the chat thread. Visually distinct
+   from message bubbles — pink-tinted left edge, no role label, the 🌐
+   icon flag-marks it as a system affordance, not a chat turn.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.chat__job-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px max(24px, calc((100% - 760px) / 2)) 0;
+}
+
+.job-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-left: 3px solid var(--c-primary);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+}
+.job-card--ready {
+  border-left-color: var(--c-success);
+  background: rgba(21, 128, 61, 0.04);
+}
+.job-card--error {
+  border-left-color: var(--c-danger);
+  background: var(--c-danger-bg);
+}
+
+.job-card__icon {
+  font-size: 20px;
+  line-height: 1;
+  align-self: start;
+  padding-top: 2px;
+}
+
+.job-card__main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.job-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.job-card__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--c-text-muted);
+}
+.job-card__detail {
+  color: var(--c-text-muted);
+}
+
+.job-card__status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-pill);
+  background: var(--c-surface-soft);
+  color: var(--c-text-muted);
+  border: 1px solid var(--c-border);
+}
+.job-card__status--pending {
+  color: var(--c-text-muted);
+  background: var(--c-surface-soft);
+  border-color: var(--c-border-strong);
+}
+.job-card__status--extracting,
+.job-card__status--chunking,
+.job-card__status--translating,
+.job-card__status--formatting {
+  color: var(--c-primary-hover);
+  background: var(--c-primary-soft);
+  border-color: rgba(255, 120, 150, 0.30);
+}
+.job-card__status--ready {
+  color: var(--c-success);
+  background: rgba(21, 128, 61, 0.08);
+  border-color: rgba(21, 128, 61, 0.25);
+}
+.job-card__status--error {
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+  border-color: var(--c-danger);
+}
+
+.job-card__downloads {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.job-card__download {
+  font-size: 13px;
+  padding: 7px 14px;
+}
+
+.job-card__error {
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--c-danger);
+  font-size: 12.5px;
+}
+
+.job-card__dismiss {
+  align-self: start;
+  border: 0;
+  background: transparent;
+  color: var(--c-text-subtle);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  transition: color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+}
+.job-card__dismiss:hover {
+  color: var(--c-ink);
+  background: var(--c-surface-soft);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Recent translations modal (Phase 8)
+   Shares the .cmdk-overlay + .cmdk-panel shell. Visually mirrors
+   .kb-library — same row geometry and status-pill language — so the
+   feature reads as part of the same family.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.recent-translations .recent-translations__panel {
+  width: min(92vw, 720px);
+  display: flex;
+  flex-direction: column;
+  max-height: min(86vh, 720px);
+}
+
+.recent-translations__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--c-border);
+}
+.recent-translations__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-ink);
+  letter-spacing: -0.01em;
+}
+.recent-translations__close {
+  border: 0;
+  background: transparent;
+  color: var(--c-text-muted);
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.recent-translations__close:hover {
+  background: var(--c-surface-soft);
+  color: var(--c-ink);
+}
+
+.recent-translations__body {
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.recent-translations__error {
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--c-danger);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.recent-translations__empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--c-text-muted);
+  font-size: 13.5px;
+  background: var(--c-surface-soft);
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius);
+}
+
+.recent-translations__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recent-translations__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-surface);
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+.recent-translations__item:hover {
+  border-color: var(--c-border-strong);
+  box-shadow: var(--shadow-1);
+}
+
+.recent-translations__item-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.recent-translations__item-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--c-ink);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-translations__item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.recent-translations__item-language {
+  font-weight: 600;
+  color: var(--c-text);
+}
+.recent-translations__item-date {
+  font-size: 11.5px;
+  color: var(--c-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.recent-translations__row-error {
+  color: var(--c-danger);
+  font-size: 12px;
+}
+
+.recent-translations__status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-pill);
+  background: var(--c-surface-soft);
+  color: var(--c-text-muted);
+  border: 1px solid var(--c-border);
+}
+.recent-translations__status--pending {
+  color: var(--c-text-muted);
+  background: var(--c-surface-soft);
+  border-color: var(--c-border-strong);
+}
+.recent-translations__status--extracting,
+.recent-translations__status--chunking,
+.recent-translations__status--translating,
+.recent-translations__status--formatting {
+  color: var(--c-primary-hover);
+  background: var(--c-primary-soft);
+  border-color: rgba(255, 120, 150, 0.30);
+}
+.recent-translations__status--ready {
+  color: var(--c-success);
+  background: rgba(21, 128, 61, 0.08);
+  border-color: rgba(21, 128, 61, 0.25);
+}
+.recent-translations__status--error {
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+  border-color: var(--c-danger);
+  cursor: help;
+}
+
+.recent-translations__item-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.recent-translations__download {
+  font-size: 12.5px;
+  padding: 6px 12px;
+}

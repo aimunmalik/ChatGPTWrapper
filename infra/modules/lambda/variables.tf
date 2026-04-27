@@ -97,6 +97,12 @@ variable "textract_enabled" {
   default     = false
 }
 
+variable "lambda_invoke_function_arns" {
+  description = "ARNs of other Lambda functions this function may invoke (e.g. for async fan-out). Grants lambda:InvokeFunction scoped to the listed ARNs."
+  type        = list(string)
+  default     = []
+}
+
 variable "function_url_enabled" {
   description = "Whether to create a Lambda Function URL. Needed for response streaming; otherwise Lambda is invoked via API Gateway."
   type        = bool

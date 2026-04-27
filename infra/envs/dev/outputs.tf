@@ -60,7 +60,18 @@ output "dynamodb" {
   value = {
     conversations = module.dynamodb.conversations_table_name
     messages      = module.dynamodb.messages_table_name
+    jobs          = module.dynamodb.jobs_table_name
   }
+}
+
+output "jobs_table_name" {
+  description = "DynamoDB table storing translation (and future async) jobs."
+  value       = module.dynamodb.jobs_table_name
+}
+
+output "translate_worker_function_name" {
+  description = "Function name of the async translation worker Lambda. Useful for ops debugging (logs, manual invokes)."
+  value       = module.lambda_translate_worker.function_name
 }
 
 output "api_endpoint" {
@@ -71,8 +82,10 @@ output "api_endpoint" {
 output "lambda_functions" {
   description = "Lambda function names."
   value = {
-    chat          = module.lambda_chat.function_name
-    conversations = module.lambda_conversations.function_name
+    chat             = module.lambda_chat.function_name
+    conversations    = module.lambda_conversations.function_name
+    translate        = module.lambda_translate.function_name
+    translate_worker = module.lambda_translate_worker.function_name
   }
 }
 
