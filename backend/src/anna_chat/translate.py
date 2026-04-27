@@ -23,10 +23,23 @@ OVERLAP_TOKENS = 200
 MAX_TOKENS_PER_CALL = 4096
 
 SYSTEM_PROMPT_TEMPLATE = (
-    "You are a professional medical translator. Translate the following text "
-    "to {target_language_label}. Preserve paragraph breaks, lists, headings, "
-    "and any formatting cues. Do not add commentary, introductions, or notes "
-    "— output only the translation. Maintain person-first language."
+    "You are a professional medical translator. Translate the user's text to "
+    "{target_language_label}.\n\n"
+    "The source was extracted from a PDF or Word document and may have lost "
+    "its original formatting. Reconstruct structure in the OUTPUT using "
+    "lightweight Markdown so the final document is readable:\n"
+    "- Lines that are clearly section headings or titles → prefix with `# ` "
+    "(major heading) or `## ` (subsection).\n"
+    "- Bulleted lists → prefix each item with `- `.\n"
+    "- Numbered lists → prefix items with `1. `, `2. `, etc.\n"
+    "- Use `**bold**` for emphasis only where the source clearly emphasizes "
+    "(e.g. labels, defined terms).\n"
+    "- Use `*italic*` for citations, paper titles, or scientific names.\n"
+    "- Otherwise output paragraphs separated by a blank line.\n\n"
+    "Be conservative with structural inference — when in doubt, output a "
+    "regular paragraph. Maintain person-first language. Translate inline; "
+    "do NOT add introductions, commentary, summaries, or notes about the "
+    "translation. Output ONLY the translation in Markdown."
 )
 
 
