@@ -116,12 +116,38 @@ locals {
   ]
 }
 
+# Some interface-endpoint services (notably newer / less-common ones like
+# cognito-idp) aren't offered in every AZ in a region. Without per-service
+# filtering, terraform tries to create the endpoint in ALL of our private
+# subnets and fails with "service does not support the availability zone
+# of subnet ..." when one of our AZs isn't on the supported list.
+#
+# Query the actual supported AZs per service, then filter our private
+# subnets to that intersection. Endpoints stay in every AZ where the
+# service IS supported. Cross-AZ traffic to an endpoint in another AZ
+# still works — costs ~$0.01/GB but functionality is intact.
+data "aws_vpc_endpoint_service" "interface" {
+  for_each     = toset(local.interface_endpoint_services)
+  service      = each.value
+  service_type = "Interface"
+}
+
+locals {
+  subnets_per_endpoint = {
+    for svc in local.interface_endpoint_services : svc => [
+      for s in aws_subnet.private :
+      s.id
+      if contains(data.aws_vpc_endpoint_service.interface[svc].availability_zones, s.availability_zone)
+    ]
+  }
+}
+
 resource "aws_vpc_endpoint" "interface" {
   for_each            = toset(local.interface_endpoint_services)
   vpc_id              = aws_vpc.this.id
   service_name        = "com.amazonaws.${var.aws_region}.${each.value}"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = aws_subnet.private[*].id
+  subnet_ids          = local.subnets_per_endpoint[each.value]
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
 
