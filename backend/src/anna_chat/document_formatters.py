@@ -46,6 +46,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import (
     ListFlowable,
     ListItem,
+    LongTable,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -54,6 +55,7 @@ from reportlab.platypus import (
 from reportlab.platypus import (
     Table as PdfTable,
 )
+from reportlab.platypus.doctemplate import LayoutError
 
 # ISO-639 codes whose scripts run right-to-left. Kept narrow on purpose.
 RTL_LANGUAGE_CODES: frozenset[str] = frozenset({"ar", "he"})
@@ -421,20 +423,45 @@ def _build_pdf_table(
     header_style: ParagraphStyle,
     body_style: ParagraphStyle,
 ) -> PdfTable:
-    """Render a markdown-table Block as a reportlab Table flowable.
+    """Render a markdown-table Block as a reportlab LongTable flowable.
 
     Uses Paragraph cells (not raw strings) so inline bold/italic in cell
     text gets honored. Auto-computes column widths from the available
-    page width so wide tables flow on Letter page-size.
+    page width. LongTable (vs plain Table) splits cleanly across page
+    breaks — necessary for tall tables that would otherwise raise
+    LayoutError on documents like full marketing-strategy templates.
+
+    For wide tables (>=5 cols) we shrink the cell font down so each
+    column has enough horizontal room to wrap text. Without this, a
+    7-column table on Letter portrait gets ~0.85" per column, and a
+    cell containing a single long unbreakable token (e.g. an URL or
+    long Spanish compound word) overflows and triggers LayoutError.
     """
     if not block.rows:
         return PdfTable([[""]])  # never reached — _parse_blocks won't emit empty
     cols = max(len(row) for row in block.rows)
     available_width = LETTER[0] - 2 * inch
     col_width = available_width / max(cols, 1)
+
+    # Shrink the cell paragraph font for narrower-per-column layouts.
+    # Mapping is heuristic: 4 cols = full size, 7+ cols = down to 8pt.
+    cell_font_size = max(8, int(body_style.fontSize - max(0, cols - 4)))
+    shrunk_body = ParagraphStyle(
+        "TranslateCellShrunk",
+        parent=body_style,
+        fontSize=cell_font_size,
+        leading=int(cell_font_size * 1.2),
+    )
+    shrunk_header = ParagraphStyle(
+        "TranslateCellHeaderShrunk",
+        parent=header_style,
+        fontSize=cell_font_size,
+        leading=int(cell_font_size * 1.2),
+    )
+
     data: list[list[Paragraph]] = []
     for r_idx, row in enumerate(block.rows):
-        style = header_style if r_idx == 0 else body_style
+        style = shrunk_header if r_idx == 0 else shrunk_body
         rendered_row = [
             Paragraph(_inline_to_xml(cell), style)
             for cell in row
@@ -443,7 +470,9 @@ def _build_pdf_table(
         while len(rendered_row) < cols:
             rendered_row.append(Paragraph("", style))
         data.append(rendered_row)
-    table = PdfTable(data, colWidths=[col_width] * cols, repeatRows=1)
+    # LongTable handles per-row pagination; plain Table refuses to split
+    # if a single row is too tall to fit on the remaining page.
+    table = LongTable(data, colWidths=[col_width] * cols, repeatRows=1)
     table.setStyle(
         TableStyle([
             ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#999999")),
@@ -456,6 +485,30 @@ def _build_pdf_table(
         ])
     )
     return table
+
+
+def _table_block_to_text(block: Block) -> Block:
+    """Convert a table Block to a paragraph Block whose text is the
+    table rendered as monospace-ish markdown.
+
+    Used as the LayoutError fallback in build_pdf — when reportlab can't
+    fit a Table flowable, we still want the user to get the data in the
+    PDF, just visually flatter. The .docx output retains the proper
+    table either way.
+    """
+    if not block.rows:
+        return Block("paragraph", "")
+    lines: list[str] = []
+    cols = max(len(r) for r in block.rows)
+    for r_idx, row in enumerate(block.rows):
+        padded = list(row) + [""] * (cols - len(row))
+        cell_text = " | ".join(c.replace("\n", " ").strip() for c in padded)
+        if r_idx == 0:
+            # Make the header visually stand out via inline bold.
+            lines.append(f"**{cell_text}**")
+        else:
+            lines.append(cell_text)
+    return Block("paragraph", "\n".join(lines))
 
 
 def _inline_to_xml(text: str) -> str:
@@ -473,7 +526,44 @@ def _inline_to_xml(text: str) -> str:
 
 
 def build_pdf(title: str, body: str, target_language_code: str) -> bytes:
-    """Render a .pdf with structured headings, lists, and inline styling."""
+    """Render a .pdf with structured headings, lists, and inline styling.
+
+    Tries the full structured render first (real Table flowables for
+    markdown tables). If reportlab raises LayoutError — typically a
+    table whose content can't fit even after font shrinking — we
+    retry once with all table Blocks collapsed to plain-text
+    paragraphs. Loses table styling in the PDF but the document
+    completes. The .docx output is unaffected and still has the real
+    Word table.
+    """
+    blocks = _parse_blocks(body)
+    try:
+        return _build_pdf_from_blocks(title, target_language_code, blocks)
+    except LayoutError as exc:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "pdf_layout_fallback",
+            extra={"errorType": type(exc).__name__, "tablesInDoc": sum(
+                1 for b in blocks if b.kind == "table"
+            )},
+        )
+        fallback_blocks = [
+            _table_block_to_text(b) if b.kind == "table" else b
+            for b in blocks
+        ]
+        return _build_pdf_from_blocks(title, target_language_code, fallback_blocks)
+
+
+def _build_pdf_from_blocks(
+    title: str, target_language_code: str, blocks: list[Block]
+) -> bytes:
+    """Render a list of pre-parsed Blocks to a PDF byte stream.
+
+    Pulled out of `build_pdf` so the LayoutError fallback can re-render
+    with a modified block list (tables collapsed to text) without
+    re-parsing.
+    """
     rtl = _is_rtl(target_language_code)
     align = TA_RIGHT if rtl else TA_LEFT
 
@@ -588,7 +678,7 @@ def build_pdf(title: str, body: str, target_language_code: str) -> bytes:
         fontName="Helvetica-Bold",
     )
 
-    for block in _parse_blocks(body):
+    for block in blocks:
         if block.kind == "table":
             flush_bullets()
             flush_numbers()

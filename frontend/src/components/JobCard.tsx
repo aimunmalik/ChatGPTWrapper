@@ -165,22 +165,34 @@ export function JobCard({ job, onJobUpdated, onDismiss, accessToken }: Props) {
 
         {status === "ready" && (
           <div className="job-card__downloads">
-            <button
-              type="button"
-              className="btn btn--primary job-card__download"
-              onClick={() => void handleDownload("docx")}
-              disabled={downloading !== null}
-            >
-              {downloading === "docx" ? "Preparing…" : "Download .docx"}
-            </button>
-            <button
-              type="button"
-              className="btn btn--primary job-card__download"
-              onClick={() => void handleDownload("pdf")}
-              disabled={downloading !== null}
-            >
-              {downloading === "pdf" ? "Preparing…" : "Download .pdf"}
-            </button>
+            {job.downloadDocxUrl && (
+              <button
+                type="button"
+                className="btn btn--primary job-card__download"
+                onClick={() => void handleDownload("docx")}
+                disabled={downloading !== null}
+              >
+                {downloading === "docx" ? "Preparing…" : "Download .docx"}
+              </button>
+            )}
+            {job.downloadPdfUrl && (
+              <button
+                type="button"
+                className="btn btn--primary job-card__download"
+                onClick={() => void handleDownload("pdf")}
+                disabled={downloading !== null}
+              >
+                {downloading === "pdf" ? "Preparing…" : "Download .pdf"}
+              </button>
+            )}
+            {!job.downloadPdfUrl && job.downloadDocxUrl && (
+              // PDF rendering can fail on documents with very wide / complex
+              // tables (reportlab LayoutError). The worker uploads the .docx
+              // first so the user still gets the Word file in this case.
+              <span className="job-card__pdf-note">
+                .pdf unavailable for this document — see .docx
+              </span>
+            )}
           </div>
         )}
 
