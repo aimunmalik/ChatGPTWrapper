@@ -92,33 +92,22 @@ export function useTranslateJobs({ accessToken }: Options): UseTranslateJobs {
     }
   }, []);
 
+  // Per docs/TRANSLATE_CONTRACT.md the JobCard list is IN-SESSION state.
+  // Refreshing the page should leave the chat clean — the persistent
+  // record of all translations lives in the "Recent translations" modal
+  // (which has its own fetcher). We deliberately do NOT auto-fetch the
+  // user's job history here on mount, otherwise every old "Ready" card
+  // re-appears above the composer on every refresh.
+  //
+  // `refresh()` is still exposed on the returned API for callers that
+  // explicitly want to reconcile (e.g. after creating a job, the hook's
+  // own createJob path doesn't need it because the create response is
+  // the source of truth).
   useEffect(() => {
-    let cancelled = false;
     if (!accessToken) {
       setJobs([]);
-      setIsLoading(false);
-      return () => {
-        cancelled = true;
-      };
     }
-    setIsLoading(true);
-    setError(null);
-    listTranslateJobs(accessToken)
-      .then((resp) => {
-        if (!cancelled) setJobs(resp.jobs);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load translations");
-          setJobs([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    setIsLoading(false);
   }, [accessToken]);
 
   const createJob = useCallback(
