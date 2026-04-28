@@ -23,7 +23,7 @@ from typing import Any
 import boto3
 
 from anna_chat.attachments_repo import AttachmentsRepo
-from anna_chat.bedrock_client import BedrockClient
+from anna_chat.bedrock_client import ASYNC_READ_TIMEOUT, BedrockClient
 from anna_chat.chunking import approx_token_count
 from anna_chat.document_formatters import build_docx, build_pdf
 from anna_chat.jobs_repo import (
@@ -86,8 +86,19 @@ def _attachments_repo() -> AttachmentsRepo:
 
 @lru_cache(maxsize=1)
 def _bedrock() -> BedrockClient:
+    """Bedrock client tuned for the LONG-running translation worker.
+
+    Uses ASYNC_READ_TIMEOUT (180s) instead of the 25s cap the chat handler
+    inherits — translation chunks can legitimately take 60s+ to generate
+    3000+ output tokens, and this Lambda has a 15-min budget regardless.
+    The chat handler keeps the 25s cap so it never blows past API GW's 30s.
+    """
     s = _settings()
-    return BedrockClient(region=s.aws_region, model_id=s.bedrock_model_id)
+    return BedrockClient(
+        region=s.aws_region,
+        model_id=s.bedrock_model_id,
+        read_timeout=ASYNC_READ_TIMEOUT,
+    )
 
 
 @lru_cache(maxsize=1)
