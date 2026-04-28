@@ -116,8 +116,8 @@ def _cognito_user(
             {"Name": "email", "Value": email},
             {"Name": "name", "Value": name},
         ],
-        "UserCreateDate": dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc),
-        "UserLastModifiedDate": dt.datetime(2026, 2, 1, tzinfo=dt.timezone.utc),
+        "UserCreateDate": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
+        "UserLastModifiedDate": dt.datetime(2026, 2, 1, tzinfo=dt.UTC),
         "Enabled": enabled,
         "UserStatus": status,
     }
@@ -138,8 +138,8 @@ def _admin_get_user_response(
             {"Name": "email", "Value": email},
             {"Name": "name", "Value": name},
         ],
-        "UserCreateDate": dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc),
-        "UserLastModifiedDate": dt.datetime(2026, 2, 1, tzinfo=dt.timezone.utc),
+        "UserCreateDate": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
+        "UserLastModifiedDate": dt.datetime(2026, 2, 1, tzinfo=dt.UTC),
         "Enabled": enabled,
         "UserStatus": status,
     }
