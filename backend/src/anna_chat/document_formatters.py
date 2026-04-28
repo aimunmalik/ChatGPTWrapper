@@ -49,8 +49,10 @@ from reportlab.platypus import (
     Paragraph,
     SimpleDocTemplate,
     Spacer,
-    Table as PdfTable,
     TableStyle,
+)
+from reportlab.platypus import (
+    Table as PdfTable,
 )
 
 # ISO-639 codes whose scripts run right-to-left. Kept narrow on purpose.
