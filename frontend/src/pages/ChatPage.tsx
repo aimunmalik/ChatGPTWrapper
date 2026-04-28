@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "react-oidc-context";
 
+import { AdminUsers } from "../components/AdminUsers";
 import { ChatView } from "../components/ChatView";
 import type { Command } from "../components/CommandPalette";
 import { CommandPalette } from "../components/CommandPalette";
@@ -38,6 +39,7 @@ export function ChatPage() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
   const [kbOpen, setKbOpen] = useState(false);
+  const [adminUsersOpen, setAdminUsersOpen] = useState(false);
   const [recentTranslationsOpen, setRecentTranslationsOpen] = useState(false);
 
   const {
@@ -231,9 +233,9 @@ export function ChatPage() {
         keywords: "translate translation translations language history docs",
         onRun: () => setRecentTranslationsOpen(true),
       },
-      // Admin-only: KB management. Conditional spread keeps the entry out
-      // of the command palette entirely for non-admins — the palette itself
-      // stays visible to everyone.
+      // Admin-only: KB management + user management. Conditional spread
+      // keeps the entries out of the command palette entirely for
+      // non-admins — the palette itself stays visible to everyone.
       ...(isAdmin
         ? [
             {
@@ -243,6 +245,15 @@ export function ChatPage() {
               hint: "Upload or remove reference documents available to Praxis",
               keywords: "knowledge base kb documents rag retrieval admin",
               onRun: () => setKbOpen(true),
+            } satisfies Command,
+            {
+              id: "manage-users",
+              label: "Manage users…",
+              group: "Library",
+              hint: "Invite, promote, disable, or sign out Praxis users",
+              keywords:
+                "users admin invite team cognito disable enable admins members",
+              onRun: () => setAdminUsersOpen(true),
             } satisfies Command,
           ]
         : []),
@@ -303,6 +314,11 @@ export function ChatPage() {
       <KnowledgeBase
         open={kbOpen}
         onClose={() => setKbOpen(false)}
+        accessToken={accessToken}
+      />
+      <AdminUsers
+        open={adminUsersOpen}
+        onClose={() => setAdminUsersOpen(false)}
         accessToken={accessToken}
       />
       <RecentTranslations

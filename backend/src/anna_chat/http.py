@@ -19,10 +19,19 @@ class _DynamoJSONEncoder(json.JSONEncoder):
 
 
 class HttpError(Exception):
-    def __init__(self, status: int, message: str) -> None:
+    def __init__(
+        self,
+        status: int,
+        message: str,
+        error_type: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.status = status
         self.message = message
+        # Optional machine-readable discriminator for the frontend (e.g. the
+        # admin panel renders different UX for SelfDisable vs LastAdmin).
+        # Existing call sites that don't pass it stay 100% compatible.
+        self.error_type = error_type
 
 
 @dataclass(frozen=True)
@@ -44,8 +53,13 @@ def ok(body: dict[str, Any], status: int = 200) -> dict[str, Any]:
     }
 
 
-def error(status: int, message: str) -> dict[str, Any]:
-    return ok({"error": message}, status=status)
+def error(
+    status: int, message: str, error_type: str | None = None
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"error": message}
+    if error_type is not None:
+        body["errorType"] = error_type
+    return ok(body, status=status)
 
 
 def parse_json_body(event: dict[str, Any]) -> dict[str, Any]:

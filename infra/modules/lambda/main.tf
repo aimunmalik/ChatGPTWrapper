@@ -149,6 +149,31 @@ data "aws_iam_policy_document" "inline" {
       resources = var.lambda_invoke_function_arns
     }
   }
+
+  dynamic "statement" {
+    for_each = length(var.cognito_user_pool_arn) > 0 ? [1] : []
+    content {
+      # Admin user-management actions for the Praxis admin panel. Scoped to
+      # the single user pool ARN passed in — never wildcard. Action set
+      # mirrors the routes in docs/ADMIN_USERS_CONTRACT.md (list, invite,
+      # group toggle, enable/disable, force sign-out).
+      sid    = "CognitoAdminUserManagement"
+      effect = "Allow"
+      actions = [
+        "cognito-idp:ListUsers",
+        "cognito-idp:ListUsersInGroup",
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminAddUserToGroup",
+        "cognito-idp:AdminRemoveUserFromGroup",
+        "cognito-idp:AdminEnableUser",
+        "cognito-idp:AdminDisableUser",
+        "cognito-idp:AdminUserGlobalSignOut",
+        "cognito-idp:AdminListGroupsForUser",
+      ]
+      resources = [var.cognito_user_pool_arn]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "inline" {

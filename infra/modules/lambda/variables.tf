@@ -103,6 +103,12 @@ variable "lambda_invoke_function_arns" {
   default     = []
 }
 
+variable "cognito_user_pool_arn" {
+  description = "ARN of a Cognito user pool the Lambda may administer (list/invite/enable/disable/group toggle/global sign-out). Empty string disables the grant."
+  type        = string
+  default     = ""
+}
+
 variable "function_url_enabled" {
   description = "Whether to create a Lambda Function URL. Needed for response streaming; otherwise Lambda is invoked via API Gateway."
   type        = bool

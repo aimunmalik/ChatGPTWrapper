@@ -86,6 +86,7 @@ output "lambda_functions" {
     conversations    = module.lambda_conversations.function_name
     translate        = module.lambda_translate.function_name
     translate_worker = module.lambda_translate_worker.function_name
+    admin            = module.lambda_admin.function_name
   }
 }
 
