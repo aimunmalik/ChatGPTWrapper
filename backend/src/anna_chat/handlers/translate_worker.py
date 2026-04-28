@@ -194,8 +194,8 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
             output_tokens_approx=result.output_tokens,
         )
         title = f"{job.sourceFilename} ({job.targetLanguageLabel})"
-        docx_bytes = build_docx(title, result.text, job.targetLanguage)
-        pdf_bytes = build_pdf(title, result.text, job.targetLanguage)
+        if not settings.attachments_bucket:
+            raise RuntimeError("attachments_bucket not configured")
 
         docx_filename = _output_filename(
             job.sourceFilename, job.targetLanguage, "docx"
@@ -206,21 +206,41 @@ def handler(event: dict[str, Any], context: object) -> dict[str, Any]:
         docx_key = f"translations/{job_id}/{docx_filename}"
         pdf_key = f"translations/{job_id}/{pdf_filename}"
 
-        if not settings.attachments_bucket:
-            raise RuntimeError("attachments_bucket not configured")
-
+        # Build + upload .docx FIRST. If .pdf rendering subsequently fails
+        # (LayoutError on a complex table, etc.), the user still gets the
+        # Word file. python-docx is rock-solid; reportlab is fragile on
+        # wide / nested-content tables.
+        docx_bytes = build_docx(title, result.text, job.targetLanguage)
         _put_object(
             bucket=settings.attachments_bucket,
             key=docx_key,
             body=docx_bytes,
             content_type=DOCX_MIME,
         )
-        _put_object(
-            bucket=settings.attachments_bucket,
-            key=pdf_key,
-            body=pdf_bytes,
-            content_type=PDF_MIME,
-        )
+
+        # Now attempt the .pdf. build_pdf has its own internal
+        # LayoutError fallback (collapses tables to text), but if even
+        # that fails we degrade further: store NULL pdf key, mark the
+        # job ready, and let the UI show "PDF unavailable".
+        pdf_bytes: bytes | None = None
+        try:
+            pdf_bytes = build_pdf(title, result.text, job.targetLanguage)
+            _put_object(
+                bucket=settings.attachments_bucket,
+                key=pdf_key,
+                body=pdf_bytes,
+                content_type=PDF_MIME,
+            )
+        except Exception as pdf_exc:
+            logger.error(
+                "translate_pdf_failed_docx_only",
+                extra={
+                    "userId": user_id,
+                    "jobId": job_id,
+                    "errorType": type(pdf_exc).__name__,
+                },
+            )
+            pdf_key = ""  # signal to set_outputs / frontend that PDF is missing
 
         # --- ready ---
         repo.set_outputs(

@@ -106,11 +106,18 @@ def _lambda():
 
 
 def _job_response(job: TranslateJob) -> dict[str, Any]:
+    # Each format URL is set independently when its output key exists. The
+    # worker uploads .docx first; if .pdf rendering subsequently fails (e.g.
+    # reportlab LayoutError on a complex table), the job still reaches
+    # status=ready with .docx-only — the user gets the Word file even when
+    # PDF can't be produced.
     download_docx_url: str | None = None
     download_pdf_url: str | None = None
-    if job.status == "ready" and job.outputDocxKey and job.outputPdfKey:
-        download_docx_url = f"/translate/jobs/{job.jobId}/download/docx"
-        download_pdf_url = f"/translate/jobs/{job.jobId}/download/pdf"
+    if job.status == "ready":
+        if job.outputDocxKey:
+            download_docx_url = f"/translate/jobs/{job.jobId}/download/docx"
+        if job.outputPdfKey:
+            download_pdf_url = f"/translate/jobs/{job.jobId}/download/pdf"
     return {
         "jobId": job.jobId,
         "userId": job.userId,
