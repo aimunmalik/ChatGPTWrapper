@@ -107,6 +107,12 @@ locals {
     # Textract above when the endpoint is missing. Any Lambda that calls
     # boto3.client("lambda").invoke(...) from inside the VPC needs this.
     "lambda",
+    # Cognito IDP is needed by the admin user-management Lambda for
+    # AdminCreateUser / list / enable-disable / global sign-out calls.
+    # Same hang-until-timeout failure mode as Textract and lambda above
+    # when missing — there's no NAT, so cognito-idp.<region>.amazonaws.com
+    # resolves but the socket never connects.
+    "cognito-idp",
   ]
 }
 

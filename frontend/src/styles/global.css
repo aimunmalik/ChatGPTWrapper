@@ -2287,3 +2287,381 @@ h1, h2, h3, h4, h5 {
   font-size: 12.5px;
   padding: 6px 12px;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Admin users modal
+   Reuses .cmdk-overlay + .cmdk-panel for the modal shell, like the
+   knowledge-base library. All admin-specific classes are prefixed
+   .admin-users__*. Pills + per-row popover share the visual language of
+   the KB status pills and the attachment-chip overflow menu, but with
+   their own BEM block so they stay independently themable.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.admin-users .admin-users__panel {
+  width: min(94vw, 880px);
+  display: flex;
+  flex-direction: column;
+  max-height: min(86vh, 820px);
+}
+
+.admin-users__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--c-border);
+}
+.admin-users__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-ink);
+  letter-spacing: -0.01em;
+}
+.admin-users__close {
+  border: 0;
+  background: transparent;
+  color: var(--c-text-muted);
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.admin-users__close:hover {
+  background: var(--c-surface-soft);
+  color: var(--c-ink);
+}
+
+.admin-users__body {
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Invite form — sits above the list, mirrors the KB upload-form card. */
+.admin-users__invite {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--c-surface-soft);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  margin-bottom: 18px;
+}
+.admin-users__invite-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.admin-users__invite-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.admin-users__invite-row .admin-users__input {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+.admin-users__invite-submit {
+  flex: 0 0 auto;
+}
+
+.admin-users__input {
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--c-surface);
+  color: var(--c-text);
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+.admin-users__input:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px var(--c-primary-soft);
+}
+.admin-users__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-users__checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--c-text);
+  cursor: pointer;
+  user-select: none;
+}
+.admin-users__checkbox input[type="checkbox"] {
+  accent-color: var(--c-primary);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.admin-users__error {
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--c-danger);
+  font-size: 13px;
+}
+.admin-users__toast {
+  color: var(--c-success);
+  background: rgba(21, 128, 61, 0.08);
+  border: 1px solid rgba(21, 128, 61, 0.25);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+/* List header — same visual cadence as kb-library__list-header. */
+.admin-users__list-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.admin-users__list-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.admin-users__list-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-text-muted);
+  background: var(--c-surface-soft);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-pill);
+  line-height: 1.4;
+}
+
+.admin-users__empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--c-text-muted);
+  font-size: 13.5px;
+  background: var(--c-surface-soft);
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius);
+}
+
+.admin-users__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-users__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-surface);
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+.admin-users__item:hover {
+  border-color: var(--c-border-strong);
+  box-shadow: var(--shadow-1);
+}
+/* Visually mute disabled rows — they're still actionable, just secondary. */
+.admin-users__item--disabled {
+  opacity: 0.78;
+}
+
+.admin-users__item-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.admin-users__item-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.admin-users__item-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--c-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-users__item-email {
+  font-size: 12.5px;
+  color: var(--c-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-users__item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+.admin-users__item-actions {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Shared pill base — varies by modifier for source / admin / status. */
+.admin-users__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-pill);
+  background: var(--c-surface-soft);
+  color: var(--c-text-muted);
+  border: 1px solid var(--c-border);
+  white-space: nowrap;
+}
+.admin-users__pill--source-local {
+  color: var(--c-text-muted);
+}
+.admin-users__pill--source-microsoft {
+  color: var(--brand-navy);
+  background: rgba(140, 220, 255, 0.20);
+  border-color: rgba(140, 220, 255, 0.45);
+}
+.admin-users__pill--admin {
+  color: var(--c-primary-hover);
+  background: rgba(255, 120, 150, 0.12);
+  border-color: rgba(255, 120, 150, 0.30);
+}
+.admin-users__pill--enabled {
+  color: var(--c-success);
+  background: rgba(21, 128, 61, 0.10);
+  border-color: rgba(21, 128, 61, 0.25);
+  /* Same dot-only "● enabled" treatment as the contract sketch — narrow. */
+  padding: 2px 6px;
+}
+.admin-users__pill--off {
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+  border-color: var(--c-danger);
+}
+[data-theme="dark"] .admin-users__pill--source-microsoft {
+  color: var(--brand-sky);
+}
+
+/* `⋯` overflow menu — adopts the attachment-chip popover visual language. */
+.admin-users__menu-btn {
+  border: 0;
+  background: transparent;
+  color: var(--c-text-subtle);
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.05em;
+  transition: color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+}
+.admin-users__menu-btn:hover,
+.admin-users__menu-btn[aria-expanded="true"] {
+  color: var(--c-ink);
+  background: var(--c-surface-soft);
+}
+.admin-users__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+  padding: 4px;
+  z-index: 20;
+  animation: fadein var(--dur-fast) var(--ease);
+}
+.admin-users__menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--c-text);
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.admin-users__menu-item:hover:not(:disabled) {
+  background: var(--c-primary-soft);
+  color: var(--c-ink);
+}
+.admin-users__menu-item:disabled {
+  color: var(--c-text-subtle);
+  cursor: not-allowed;
+}
+
+/* Per-row inline error — shows the typed SelfDisable / SelfDemote /
+   LastAdmin message after a rolled-back optimistic update. */
+.admin-users__row-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--c-danger);
+  background: var(--c-danger-bg);
+  border: 1px solid var(--c-danger);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+.admin-users__row-error span {
+  flex: 1;
+}
+.admin-users__row-error-dismiss {
+  border: 0;
+  background: transparent;
+  color: var(--c-danger);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.admin-users__row-error-dismiss:hover {
+  background: rgba(185, 28, 28, 0.15);
+}

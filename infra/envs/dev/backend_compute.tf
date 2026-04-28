@@ -405,6 +405,38 @@ module "lambda_translate_worker" {
   tags = local.tags
 }
 
+# ──────────────────────────────────────────────────────────────────────────
+# Phase 9: admin user management (Praxis admin panel)
+# ──────────────────────────────────────────────────────────────────────────
+
+# Admin-only user-management handler — list/invite/toggle-admin/enable-disable/
+# force-sign-out against the Cognito user pool. No DDB / S3 / Bedrock / Textract
+# perms; it only talks to cognito-idp. See docs/ADMIN_USERS_CONTRACT.md.
+module "lambda_admin" {
+  source = "../../modules/lambda"
+
+  function_name   = "anna-chat-${var.env}-admin"
+  handler         = "anna_chat.handlers.admin_users.handler"
+  zip_path        = local.lambda_zip_path
+  timeout_seconds = 15
+  memory_mb       = 512
+
+  environment_variables = merge(local.lambda_env, {
+    AWS_LAMBDA_LOG_FORMAT = "JSON"
+  })
+
+  log_retention_days = var.log_retention_days
+  logs_kms_key_arn   = module.kms_logs.key_arn
+
+  vpc_id         = module.network.vpc_id
+  vpc_cidr       = module.network.vpc_cidr
+  vpc_subnet_ids = module.network.private_subnet_ids
+
+  cognito_user_pool_arn = module.cognito.user_pool_arn
+
+  tags = local.tags
+}
+
 module "api" {
   source = "../../modules/api"
 
@@ -498,6 +530,24 @@ module "api" {
     "GET /translate/jobs/{jobId}/download/{format}" = {
       lambda_function_name = module.lambda_translate.function_name
       lambda_invoke_arn    = module.lambda_translate.invoke_arn
+    }
+    # Admin user management — see docs/ADMIN_USERS_CONTRACT.md. All routes
+    # gated by http.require_admin in the handler.
+    "GET /admin/users" = {
+      lambda_function_name = module.lambda_admin.function_name
+      lambda_invoke_arn    = module.lambda_admin.invoke_arn
+    }
+    "POST /admin/users" = {
+      lambda_function_name = module.lambda_admin.function_name
+      lambda_invoke_arn    = module.lambda_admin.invoke_arn
+    }
+    "PATCH /admin/users/{username}" = {
+      lambda_function_name = module.lambda_admin.function_name
+      lambda_invoke_arn    = module.lambda_admin.invoke_arn
+    }
+    "POST /admin/users/{username}/sign-out" = {
+      lambda_function_name = module.lambda_admin.function_name
+      lambda_invoke_arn    = module.lambda_admin.invoke_arn
     }
   }
 
