@@ -105,6 +105,12 @@ module "lambda_chat_worker" {
   # whenever this list is non-empty — the worker needs the streaming action.
   bedrock_model_arns = local.bedrock_model_arns
 
+  # Capture failed async invocations (timeout/OOM/crash) instead of dropping
+  # them. The event payload carries the user message (PHI), so encrypt the DLQ
+  # with the data CMK — the role already holds kms perms on it via kms_key_arns.
+  dlq_enabled     = true
+  dlq_kms_key_arn = module.kms_dynamodb.key_arn
+
   tags = local.tags
 }
 
@@ -450,6 +456,12 @@ module "lambda_translate_worker" {
   # future iteration wants to).
   s3_bucket_arns     = [module.attachments.bucket_arn]
   bedrock_model_arns = local.bedrock_model_arns
+
+  # Capture failed async invocations (timeout/OOM/crash) instead of dropping
+  # them. Encrypt the DLQ with the data CMK (role already holds kms perms via
+  # kms_key_arns above).
+  dlq_enabled     = true
+  dlq_kms_key_arn = module.kms_dynamodb.key_arn
 
   tags = local.tags
 }
