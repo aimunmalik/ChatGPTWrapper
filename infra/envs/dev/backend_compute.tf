@@ -38,6 +38,8 @@ module "lambda_chat" {
 
   environment_variables = merge(local.lambda_env, {
     AWS_LAMBDA_LOG_FORMAT = "JSON"
+    # Async streaming kickoff (POST /chat/stream) fans out to this worker.
+    CHAT_WORKER_FUNCTION_NAME = module.lambda_chat_worker.function_name
   })
 
   log_retention_days = var.log_retention_days
@@ -54,6 +56,53 @@ module "lambda_chat" {
     module.kb.table_arn,
   ]
   kms_key_arns       = [module.kms_dynamodb.key_arn]
+  bedrock_model_arns = local.bedrock_model_arns
+  # Async fan-out to the streaming worker on POST /chat/stream.
+  lambda_invoke_function_arns = [module.lambda_chat_worker.function_arn]
+
+  tags = local.tags
+}
+
+# Background worker for async streaming chat — see docs/STREAMING_CONTRACT.md.
+# Invoked async (InvocationType=Event) by lambda_chat on POST /chat/stream, never
+# via API Gateway. Long timeout (AWS hard cap) because Bedrock streaming
+# generation runs to completion in a single invocation, periodically writing
+# partial content to the message row so the browser poll can show it building.
+# Needs the SAME data access as lambda_chat: KB retrieval (DDB read + Titan
+# embeddings via Bedrock), conversations+messages RW, attachments read. It does
+# NOT get CHAT_WORKER_FUNCTION_NAME and does NOT invoke other Lambdas.
+module "lambda_chat_worker" {
+  source = "../../modules/lambda"
+
+  function_name   = "anna-chat-${var.env}-chat-worker"
+  handler         = "anna_chat.handlers.chat_worker.handler"
+  zip_path        = local.lambda_zip_path
+  timeout_seconds = 900
+  memory_mb       = 1024
+
+  environment_variables = merge(local.lambda_env, {
+    AWS_LAMBDA_LOG_FORMAT = "JSON"
+  })
+
+  log_retention_days = var.log_retention_days
+  logs_kms_key_arn   = module.kms_logs.key_arn
+
+  vpc_id         = module.network.vpc_id
+  vpc_cidr       = module.network.vpc_cidr
+  vpc_subnet_ids = module.network.private_subnet_ids
+
+  # Mirror lambda_chat exactly: RW on conversations + messages, read on
+  # attachments + KB tables (the module's DDB statement spans all listed ARNs).
+  dynamodb_table_arns = [
+    module.dynamodb.conversations_table_arn,
+    module.dynamodb.messages_table_arn,
+    module.attachments.table_arn,
+    module.kb.table_arn,
+  ]
+  kms_key_arns = [module.kms_dynamodb.key_arn]
+  # Bedrock invoke incl. Titan embeddings for KB retrieval. The lambda module
+  # grants both bedrock:InvokeModel and bedrock:InvokeModelWithResponseStream
+  # whenever this list is non-empty — the worker needs the streaming action.
   bedrock_model_arns = local.bedrock_model_arns
 
   tags = local.tags
@@ -451,6 +500,17 @@ module "api" {
 
   routes = {
     "POST /chat" = {
+      lambda_function_name = module.lambda_chat.function_name
+      lambda_invoke_arn    = module.lambda_chat.invoke_arn
+    }
+    # Async streaming chat — see docs/STREAMING_CONTRACT.md. Both routes hit the
+    # same chat Lambda (kickoff + poll); the chat_worker is invoked async by the
+    # handler, not via API Gateway.
+    "POST /chat/stream" = {
+      lambda_function_name = module.lambda_chat.function_name
+      lambda_invoke_arn    = module.lambda_chat.invoke_arn
+    }
+    "GET /chat/stream" = {
       lambda_function_name = module.lambda_chat.function_name
       lambda_invoke_arn    = module.lambda_chat.invoke_arn
     }

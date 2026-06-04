@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { postChat } from "../api/chat";
+import { postChatStream, pollChatStream } from "../api/chat";
 import type { Source } from "../api/chat";
 import type { Attachment } from "../api/attachments";
 import type { MessageSummary } from "../api/conversations";
@@ -50,6 +50,25 @@ export function ChatView({
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const activeConvRef = useRef<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Holds the in-flight streaming poll so it can be cancelled on unmount or
+  // when the conversation switches (mirrors JobCard's setInterval + cancelled
+  // flag style). `cancelled` short-circuits any tick already scheduled;
+  // `settle` resolves the awaiting promise in handleSubmit so it doesn't dangle.
+  const pollRef = useRef<{
+    handle: number;
+    cancelled: boolean;
+    settle: () => void;
+  } | null>(null);
+  const stopPoll = () => {
+    if (pollRef.current) {
+      const ctrl = pollRef.current;
+      ctrl.cancelled = true;
+      window.clearInterval(ctrl.handle);
+      pollRef.current = null;
+      ctrl.settle();
+    }
+  };
 
   const {
     attachments,
@@ -111,11 +130,18 @@ export function ChatView({
 
   useEffect(() => {
     if (activeConvRef.current !== conversationId) {
+      // Cancel any streaming poll tied to the conversation we're leaving so a
+      // late tick can't write a stale answer into the freshly reset drafts.
+      stopPoll();
+      setSending(false);
       setDrafts([]);
       setError(null);
       activeConvRef.current = conversationId;
     }
   }, [conversationId]);
+
+  // Cancel any in-flight poll on unmount.
+  useEffect(() => stopPoll, []);
 
   const displayed = useMemo<DraftMessage[]>(() => {
     const base: DraftMessage[] = initialMessages.map((m) => ({
@@ -151,29 +177,119 @@ export function ChatView({
     setError(null);
 
     try {
-      const resp = await postChat(accessToken, {
+      // 1) Kick off the background worker. Returns the coordinates we poll.
+      const start = await postChatStream(accessToken, {
         message: trimmed,
         conversationId: conversationId ?? undefined,
         model,
       });
 
-      setDrafts((prev) =>
-        prev.map((d) =>
-          d.id === assistantId
-            ? {
-                ...d,
-                content: resp.assistantMessage,
-                pending: false,
-                sources: resp.sources,
-              }
-            : d,
-        ),
-      );
-
+      // Surface the new conversation immediately so the sidebar/url update
+      // while the answer is still streaming.
       if (!conversationId) {
-        onConversationCreated(resp.conversationId, trimmed.slice(0, 80));
+        onConversationCreated(start.conversationId, trimmed.slice(0, 80));
       }
+
+      // 2) Poll until the message status is terminal. Stop on unmount /
+      //    conversation switch (stopPoll) and after a safety cap (~16 min).
+      const POLL_INTERVAL_MS = 800;
+      const MAX_POLLS = 1200; // ~16 min at 800ms
+      let polls = 0;
+
+      await new Promise<void>((resolve) => {
+        // Cancel any earlier poll before starting a new one (defensive — a
+        // previous send should already be done since the composer is locked).
+        stopPoll();
+        const controller = { handle: 0, cancelled: false, settle: resolve };
+
+        const finish = () => {
+          if (controller.cancelled) return;
+          stopPoll();
+          resolve();
+        };
+
+        const tick = async () => {
+          if (controller.cancelled) return;
+          polls += 1;
+
+          if (polls > MAX_POLLS) {
+            setError("The response timed out. Please try again.");
+            setDrafts((prev) =>
+              prev
+                .map((d) => (d.id === assistantId ? { ...d, pending: false } : d))
+                .filter((d) => !(d.id === assistantId && !d.content)),
+            );
+            finish();
+            return;
+          }
+
+          let poll;
+          try {
+            poll = await pollChatStream(
+              accessToken,
+              start.conversationId,
+              start.sortKey,
+            );
+          } catch {
+            // Swallow transient poll errors — the next tick retries. A
+            // persistent failure eventually trips the MAX_POLLS safety cap.
+            return;
+          }
+          if (controller.cancelled) return;
+
+          if (poll.status === "complete") {
+            setDrafts((prev) =>
+              prev.map((d) =>
+                d.id === assistantId
+                  ? {
+                      ...d,
+                      content: poll.content,
+                      pending: false,
+                      sources: poll.sources,
+                    }
+                  : d,
+              ),
+            );
+            finish();
+            return;
+          }
+
+          if (poll.status === "error") {
+            setError("The assistant ran into a problem generating a response.");
+            setDrafts((prev) =>
+              prev
+                .map((d) =>
+                  d.id === assistantId
+                    ? { ...d, content: poll.content, pending: false }
+                    : d,
+                )
+                // Drop the placeholder entirely if nothing streamed back, to
+                // match the existing catch-block UX.
+                .filter((d) => !(d.id === assistantId && !poll.content)),
+            );
+            finish();
+            return;
+          }
+
+          // status === "streaming": fold the partial text in, stay pending.
+          setDrafts((prev) =>
+            prev.map((d) =>
+              d.id === assistantId ? { ...d, content: poll.content } : d,
+            ),
+          );
+        };
+
+        controller.handle = window.setInterval(() => {
+          void tick();
+        }, POLL_INTERVAL_MS);
+        pollRef.current = controller;
+        // Fire an immediate first poll so a fast answer doesn't wait a full
+        // interval before showing anything.
+        void tick();
+      });
     } catch (err) {
+      // Kickoff (postChatStream) failed — mirror the original catch UX.
+      stopPoll();
       const message = err instanceof Error ? err.message : "Unknown error";
       setError(message);
       setDrafts((prev) => prev.filter((d) => d.id !== assistantId));

@@ -33,6 +33,7 @@ def _settings() -> Settings:
         kb_max_size_bytes=104857600,
         jobs_table="t-jobs",
         translate_worker_function_name="lambda_translate_worker",
+        chat_worker_function_name="lambda_chat_worker",
     )
 
 
