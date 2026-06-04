@@ -132,6 +132,24 @@ variable "function_url_cors_origins" {
   default     = []
 }
 
+variable "dlq_enabled" {
+  description = "Create an SQS dead-letter queue and route async (InvocationType=Event) invocation failures to it. Use for fire-and-forget workers; otherwise the Lambda service drops failed events silently after its retries."
+  type        = bool
+  default     = false
+}
+
+variable "dlq_kms_key_arn" {
+  description = "KMS CMK ARN encrypting the DLQ. Null falls back to SSE-SQS (AWS-managed). Async event payloads can carry user content (PHI), so prefer a CMK — and pass that same key in kms_key_arns so the function role can encrypt deliveries to it."
+  type        = string
+  default     = null
+}
+
+variable "dlq_message_retention_seconds" {
+  description = "How long failed events are retained in the DLQ. Default 14 days (the SQS maximum) gives ample time to investigate and replay."
+  type        = number
+  default     = 1209600
+}
+
 variable "tags" {
   description = "Tags applied to resources created by this module."
   type        = map(string)

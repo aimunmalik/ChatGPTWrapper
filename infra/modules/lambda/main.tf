@@ -174,6 +174,18 @@ data "aws_iam_policy_document" "inline" {
       resources = [var.cognito_user_pool_arn]
     }
   }
+
+  dynamic "statement" {
+    for_each = var.dlq_enabled ? [1] : []
+    content {
+      # Lets the function deliver failed async (Event) invocations to its own
+      # dead-letter queue. Scoped to this function's DLQ ARN only.
+      sid       = "DlqSendMessage"
+      effect    = "Allow"
+      actions   = ["sqs:SendMessage"]
+      resources = [aws_sqs_queue.dlq[0].arn]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "inline" {
@@ -256,3 +268,41 @@ resource "aws_lambda_function_url" "this" {
 # Lambda permission for CloudFront OAC access is added from the env root
 # module (infra/envs/*/edge.tf) to avoid a dependency cycle between the
 # lambda and edge modules.
+
+# ──────────────────────────────────────────────────────────────────────────
+# Optional dead-letter queue for async (InvocationType=Event) failures.
+# The Lambda service retries an async invoke up to maximum_retry_attempts, then
+# drops the event silently — for fire-and-forget workers (translate, chat) that
+# means a failed job just vanishes. Capturing it in a DLQ + alarming on depth
+# (alarm lives in the env's monitoring.tf) turns that into a visible, replayable
+# signal.
+# ──────────────────────────────────────────────────────────────────────────
+
+resource "aws_sqs_queue" "dlq" {
+  count                     = var.dlq_enabled ? 1 : 0
+  name                      = "${var.function_name}-dlq"
+  message_retention_seconds = var.dlq_message_retention_seconds
+
+  # Async event payloads can carry user content (PHI). Encrypt at rest with the
+  # provided CMK; fall back to SSE-SQS (AWS-managed) only when no CMK is passed.
+  # Only one of kms_master_key_id / sqs_managed_sse_enabled may be set, so the
+  # SSE flag is left unset (null) whenever a CMK is provided.
+  kms_master_key_id                 = var.dlq_kms_key_arn
+  kms_data_key_reuse_period_seconds = var.dlq_kms_key_arn != null ? 300 : null
+  sqs_managed_sse_enabled           = var.dlq_kms_key_arn == null ? true : null
+
+  tags = merge(var.tags, { Name = "${var.function_name}-dlq" })
+}
+
+resource "aws_lambda_function_event_invoke_config" "this" {
+  count                        = var.dlq_enabled ? 1 : 0
+  function_name                = aws_lambda_function.this.function_name
+  maximum_retry_attempts       = 2
+  maximum_event_age_in_seconds = 3600
+
+  destination_config {
+    on_failure {
+      destination = aws_sqs_queue.dlq[0].arn
+    }
+  }
+}

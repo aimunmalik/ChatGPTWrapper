@@ -197,6 +197,163 @@ resource "aws_cloudwatch_metric_alarm" "billing_anomaly" {
   tags          = local.tags
 }
 
+# ── Async workers: catastrophic failures + dead-letter queues ────────────
+# The translate + chat workers run async (InvocationType=Event). They catch
+# handled errors internally and set status=error (the user sees that), but a
+# timeout / OOM / crash produces NO user feedback. So we watch three things:
+# the Lambda Errors metric (catastrophic), the DLQ depth (events that failed
+# all retries), and the structured failure log events (handled-but-logged).
+
+resource "aws_cloudwatch_metric_alarm" "translate_worker_errors" {
+  alarm_name          = "anna-chat-${var.env}-translate-worker-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "Translate worker had an unhandled failure (timeout/OOM/crash) — the job produced no output. Check /aws/lambda/anna-chat-${var.env}-translate-worker and the DLQ."
+
+  dimensions = {
+    FunctionName = module.lambda_translate_worker.function_name
+  }
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = local.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "chat_worker_errors" {
+  alarm_name          = "anna-chat-${var.env}-chat-worker-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "Chat streaming worker had an unhandled failure (timeout/OOM/crash) — the assistant message will be stuck 'streaming'. Check /aws/lambda/anna-chat-${var.env}-chat-worker and the DLQ."
+
+  dimensions = {
+    FunctionName = module.lambda_chat_worker.function_name
+  }
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = local.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "translate_worker_dlq" {
+  alarm_name          = "anna-chat-${var.env}-translate-worker-dlq"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "A translation job exhausted its retries and landed in the DLQ. Inspect/replay anna-chat-${var.env}-translate-worker-dlq."
+
+  dimensions = {
+    QueueName = module.lambda_translate_worker.dlq_name
+  }
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = local.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "chat_worker_dlq" {
+  alarm_name          = "anna-chat-${var.env}-chat-worker-dlq"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "A chat turn exhausted its retries and landed in the DLQ. Inspect/replay anna-chat-${var.env}-chat-worker-dlq."
+
+  dimensions = {
+    QueueName = module.lambda_chat_worker.dlq_name
+  }
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = local.tags
+}
+
+# Handled-but-logged failures: the worker caught the error and set status=error
+# (so the user is informed), but a sustained rate means something is broken
+# (Bedrock degraded, KB cold, etc.). Count the structured failure log events.
+
+resource "aws_cloudwatch_log_metric_filter" "chat_worker_failures" {
+  name           = "anna-chat-${var.env}-chat-worker-failures"
+  log_group_name = module.lambda_chat_worker.log_group_name
+  pattern        = "{ $.message = \"chat_stream_failed\" }"
+
+  metric_transformation {
+    name          = "ChatWorkerFailures"
+    namespace     = "AnnaChat/${var.env}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "chat_worker_failure_rate" {
+  alarm_name          = "anna-chat-${var.env}-chat-worker-failure-rate"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  metric_name         = "ChatWorkerFailures"
+  namespace           = "AnnaChat/${var.env}"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 3
+  treat_missing_data  = "notBreaching"
+  alarm_description   = ">3 chat turns failed generation in 5 minutes (handled errors). Bedrock or the KB may be degraded."
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = local.tags
+}
+
+resource "aws_cloudwatch_log_metric_filter" "translate_worker_failures" {
+  name           = "anna-chat-${var.env}-translate-worker-failures"
+  log_group_name = module.lambda_translate_worker.log_group_name
+  pattern        = "{ $.message = \"translate_failed\" }"
+
+  metric_transformation {
+    name          = "TranslateWorkerFailures"
+    namespace     = "AnnaChat/${var.env}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "translate_worker_failure_rate" {
+  alarm_name          = "anna-chat-${var.env}-translate-worker-failure-rate"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  metric_name         = "TranslateWorkerFailures"
+  namespace           = "AnnaChat/${var.env}"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 2
+  treat_missing_data  = "notBreaching"
+  alarm_description   = ">2 translation jobs failed in 5 minutes (handled errors). Check the translate worker."
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = local.tags
+}
+
 # ── Outputs ──────────────────────────────────────────────────────────────
 
 output "alerts_topic_arn" {
