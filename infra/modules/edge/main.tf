@@ -81,8 +81,8 @@ data "aws_iam_policy_document" "spa_bucket" {
   }
 
   statement {
-    sid       = "DenyInsecureTransport"
-    effect    = "Deny"
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
     principals {
       type        = "*"
       identifiers = ["*"]
@@ -186,11 +186,11 @@ resource "aws_cloudfront_distribution" "spa" {
       origin_access_control_id = aws_cloudfront_origin_access_control.chat_stream[0].id
 
       custom_origin_config {
-        http_port              = 80
-        https_port             = 443
-        origin_protocol_policy = "https-only"
-        origin_ssl_protocols   = ["TLSv1.2"]
-        origin_read_timeout    = 60
+        http_port                = 80
+        https_port               = 443
+        origin_protocol_policy   = "https-only"
+        origin_ssl_protocols     = ["TLSv1.2"]
+        origin_read_timeout      = 60
         origin_keepalive_timeout = 60
       }
     }
@@ -214,7 +214,7 @@ resource "aws_cloudfront_distribution" "spa" {
       path_pattern           = "/api/chat-stream"
       target_origin_id       = "chat-stream-lambda"
       viewer_protocol_policy = "https-only"
-      compress               = false  # streaming responses; no buffering
+      compress               = false # streaming responses; no buffering
 
       allowed_methods = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
       cached_methods  = ["GET", "HEAD"]

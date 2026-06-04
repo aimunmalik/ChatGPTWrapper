@@ -168,8 +168,8 @@ resource "aws_cognito_user_pool_client" "spa" {
     "ALLOW_REFRESH_TOKEN_AUTH",
   ]
 
-  access_token_validity  = 60
-  id_token_validity      = 60
+  access_token_validity = 60
+  id_token_validity     = 60
   # Lowered from 30 days to 1 day so a user disabled in Entra (or
   # removed from the M365 tenant) loses Praxis access within ~24h
   # rather than holding a valid refresh token for a month. Cognito

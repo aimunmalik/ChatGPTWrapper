@@ -1,9 +1,14 @@
-# The PR-time `terraform-plan` job was removed intentionally. The CI role's
-# trust policy (infra/envs/dev/ci.tf) no longer accepts `pull_request` OIDC
-# tokens — only `ref:refs/heads/main` — because the role currently holds
-# AdministratorAccess and any PR (including one modifying the workflow) could
-# otherwise assume full admin. Plan+apply still runs on merge to main via
-# deploy.yml; we've traded PR-time plan preview for a tighter trust scope.
+# CI gates every PR + push to main with credential-free jobs: backend tests,
+# frontend build, and infra static checks (fmt + validate + Checkov). NONE of
+# them assume an AWS role, so a malicious PR (even one editing this workflow)
+# can't reach AWS.
+#
+# There is intentionally NO credentialed `terraform plan` job here. The deploy
+# CI role (infra/envs/dev/ci.tf) holds AdministratorAccess and its trust policy
+# only accepts `ref:refs/heads/main`, so a PR can't assume admin. Plan+apply
+# runs on merge to main via deploy.yml. Adding a real plan-on-PR safely needs a
+# SEPARATE read-only OIDC role trusted for `pull_request` — tracked as a Tier-1
+# follow-up; until then `validate` gives us config-correctness on PRs.
 name: ci
 
 on:
@@ -74,4 +79,41 @@ jobs:
           VITE_COGNITO_CLIENT_ID: ${{ vars.COGNITO_SPA_CLIENT_ID }}
           VITE_COGNITO_DOMAIN: ${{ vars.COGNITO_DOMAIN }}
           VITE_API_ENDPOINT: ${{ vars.API_ENDPOINT }}
+
+  infra-validate:
+    name: Infra — fmt + validate + Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.8"
+
+      # Enforces the repo stays `terraform fmt`-clean. Run `terraform fmt
+      # -recursive infra` locally to fix any failure here.
+      - name: terraform fmt (check)
+        run: terraform fmt -check -recursive infra
+
+      # Config-correctness without touching AWS. `-backend=false` skips the S3
+      # backend (no creds needed); validate still catches type/reference errors,
+      # bad module wiring, and the kind of HCL mistakes unit tests can't.
+      - name: terraform validate
+        working-directory: infra/envs/dev
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Static IaC security scan (no AWS creds). Soft-fail for now: surface
+      # findings on every PR without blocking while we triage the baseline.
+      # Drop `--soft-fail` to make it a hard gate once findings are addressed
+      # or explicitly skipped with inline `# checkov:skip=` comments.
+      - name: Checkov (static security scan)
+        run: |
+          pip install checkov
+          checkov --directory infra --quiet --compact --soft-fail
 
