@@ -53,6 +53,11 @@ class Message:
     model: str = ""
     ttl: int = 0
     sources: list[dict[str, Any]] = field(default_factory=list)
+    # "complete" for normal finished messages — and for all legacy rows, since
+    # the dataclass default fills in when the attribute is absent on read.
+    # "streaming" while the async chat worker is still generating; "error" if
+    # generation failed. Drives the live-poll UI for streaming chat.
+    status: str = "complete"
 
 
 class Repository:
@@ -158,6 +163,102 @@ class Repository:
         self._messages.put_item(Item=_floats_to_decimal(asdict(msg)))
         return msg
 
+    def create_streaming_message(
+        self, *, conversation_id: str, user_id: str, model: str = ""
+    ) -> Message:
+        """Create an empty assistant message in `streaming` state.
+
+        The async chat worker fills `content` incrementally via
+        update_streaming_content, then closes it out with finalize_message. The
+        row lives in normal conversation history, so it surfaces through
+        list_messages like any other message (its `status` reflects progress).
+        Returns the Message so the caller keeps the (conversationId, sortKey)
+        needed to poll and update it.
+        """
+        now = self._now_ms()
+        message_id = f"m_{uuid.uuid4().hex[:16]}"
+        msg = Message(
+            conversationId=conversation_id,
+            sortKey=self._sort_key(now, message_id),
+            userId=user_id,
+            role="assistant",
+            content="",
+            messageId=message_id,
+            model=model,
+            ttl=int(time.time()) + self._ttl_seconds,
+            status="streaming",
+        )
+        self._messages.put_item(Item=_floats_to_decimal(asdict(msg)))
+        return msg
+
+    def update_streaming_content(
+        self, *, conversation_id: str, sort_key: str, content: str
+    ) -> None:
+        """Overwrite the in-progress message body. Called periodically while
+        the worker streams; leaves status at `streaming`. `content` is aliased
+        because it could collide with a DynamoDB reserved word."""
+        self._messages.update_item(
+            Key={"conversationId": conversation_id, "sortKey": sort_key},
+            UpdateExpression="SET #c = :c",
+            ExpressionAttributeNames={"#c": "content"},
+            ExpressionAttributeValues={":c": content},
+        )
+
+    def finalize_message(
+        self,
+        *,
+        conversation_id: str,
+        sort_key: str,
+        content: str,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        model: str = "",
+        sources: list[dict[str, Any]] | None = None,
+        status: str = "complete",
+    ) -> None:
+        """Close out a streaming message with its final body, token usage,
+        sources, and terminal status ("complete" or "error"). Every attribute
+        name is aliased to dodge DynamoDB reserved words (status, etc.)."""
+        self._messages.update_item(
+            Key={"conversationId": conversation_id, "sortKey": sort_key},
+            UpdateExpression=(
+                "SET #c = :c, #it = :it, #ot = :ot, #m = :m, #src = :src, "
+                "#st = :st"
+            ),
+            ExpressionAttributeNames={
+                "#c": "content",
+                "#it": "inputTokens",
+                "#ot": "outputTokens",
+                "#m": "model",
+                "#src": "sources",
+                "#st": "status",
+            },
+            ExpressionAttributeValues=_floats_to_decimal(
+                {
+                    ":c": content,
+                    ":it": int(input_tokens),
+                    ":ot": int(output_tokens),
+                    ":m": model,
+                    ":src": list(sources) if sources else [],
+                    ":st": status,
+                }
+            ),
+        )
+
+    def get_message(
+        self, *, conversation_id: str, sort_key: str
+    ) -> Message | None:
+        """Fetch a single message by its (conversationId, sortKey) — the fast
+        single-item read backing the streaming poll endpoint."""
+        resp = self._messages.get_item(
+            Key={"conversationId": conversation_id, "sortKey": sort_key}
+        )
+        item = resp.get("Item")
+        if not item:
+            return None
+        item.setdefault("sources", [])
+        return Message(**item)
+
     def list_messages(self, *, conversation_id: str, limit: int = 200) -> list[Message]:
         resp = self._messages.query(
             KeyConditionExpression=Key("conversationId").eq(conversation_id),
@@ -178,4 +279,8 @@ class Repository:
         self, *, conversation_id: str, max_turns: int = 20
     ) -> list[dict[str, Any]]:
         msgs = self.list_messages(conversation_id=conversation_id, limit=max_turns * 2)
-        return [{"role": m.role, "content": m.content} for m in msgs if m.role in {"user", "assistant"}]
+        return [
+            {"role": m.role, "content": m.content}
+            for m in msgs
+            if m.role in {"user", "assistant"} and m.status != "streaming"
+        ]

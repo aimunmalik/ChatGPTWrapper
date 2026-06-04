@@ -41,3 +41,51 @@ export function postChat(accessToken: string, req: ChatRequest): Promise<ChatRes
     body: JSON.stringify(req),
   });
 }
+
+/**
+ * Streaming chat (Path B — async worker + poll). See docs/STREAMING_CONTRACT.md.
+ *
+ * `postChatStream` kicks off generation: the backend persists the user message,
+ * creates an empty assistant message, async-invokes the worker, and returns the
+ * coordinates the client needs to poll. `pollChatStream` reads the partial /
+ * final assistant text until `status` is terminal.
+ */
+export interface ChatStreamStart {
+  conversationId: string;
+  messageId: string;
+  sortKey: string;
+  status: string;
+}
+
+export interface ChatStreamPoll {
+  conversationId: string;
+  messageId: string;
+  sortKey: string;
+  status: "streaming" | "complete" | "error";
+  content: string;
+  sources: Source[];
+  tokens: { input: number; output: number };
+  model: string;
+}
+
+export function postChatStream(
+  accessToken: string,
+  req: ChatRequest,
+): Promise<ChatStreamStart> {
+  return apiFetch<ChatStreamStart>("/chat/stream", accessToken, {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export function pollChatStream(
+  accessToken: string,
+  conversationId: string,
+  sortKey: string,
+): Promise<ChatStreamPoll> {
+  // sortKey contains `#`, so both query params are percent-encoded.
+  const query = `?cid=${encodeURIComponent(conversationId)}&sk=${encodeURIComponent(sortKey)}`;
+  return apiFetch<ChatStreamPoll>(`/chat/stream${query}`, accessToken, {
+    method: "GET",
+  });
+}

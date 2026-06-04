@@ -21,6 +21,7 @@ class Settings:
     kb_max_size_bytes: int
     jobs_table: str
     translate_worker_function_name: str
+    chat_worker_function_name: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -52,5 +53,8 @@ class Settings:
             jobs_table=os.environ.get("JOBS_TABLE", ""),
             translate_worker_function_name=os.environ.get(
                 "TRANSLATE_WORKER_FUNCTION_NAME", ""
+            ),
+            chat_worker_function_name=os.environ.get(
+                "CHAT_WORKER_FUNCTION_NAME", ""
             ),
         )
