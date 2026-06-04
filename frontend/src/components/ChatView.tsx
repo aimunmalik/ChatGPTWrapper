@@ -184,11 +184,14 @@ export function ChatView({
         model,
       });
 
-      // Surface the new conversation immediately so the sidebar/url update
-      // while the answer is still streaming.
-      if (!conversationId) {
-        onConversationCreated(start.conversationId, trimmed.slice(0, 80));
-      }
+      // Whether this send STARTED a brand-new conversation. We deliberately do
+      // NOT surface it now: calling onConversationCreated flips the
+      // `conversationId` prop, which fires the conversation-change effect — and
+      // that cancels this poll and clears the draft bubbles, leaving an empty
+      // message while the worker keeps running server-side. Defer surfacing it
+      // to the terminal handler (mirrors the old synchronous flow, which only
+      // surfaced the conversation once the answer was ready).
+      const startedWithoutConversation = !conversationId;
 
       // 2) Poll until the message status is terminal. Stop on unmount /
       //    conversation switch (stopPoll) and after a safety cap (~16 min).
@@ -250,6 +253,12 @@ export function ChatView({
                   : d,
               ),
             );
+            // Answer is saved — now surface the new conversation so it appears
+            // in the sidebar. The conversation-change effect then swaps our
+            // drafts for the persisted messages loaded from the server.
+            if (startedWithoutConversation) {
+              onConversationCreated(start.conversationId, trimmed.slice(0, 80));
+            }
             finish();
             return;
           }
