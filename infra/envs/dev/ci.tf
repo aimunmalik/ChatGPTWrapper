@@ -39,9 +39,9 @@ data "aws_iam_policy_document" "github_actions_trust" {
 }
 
 resource "aws_iam_role" "github_actions" {
-  name               = "anna-chat-${var.env}-github-actions"
-  description        = "Assumed by GitHub Actions workflows in ${local.github_repo} to deploy anna-chat ${var.env}."
-  assume_role_policy = data.aws_iam_policy_document.github_actions_trust.json
+  name                 = "anna-chat-${var.env}-github-actions"
+  description          = "Assumed by GitHub Actions workflows in ${local.github_repo} to deploy anna-chat ${var.env}."
+  assume_role_policy   = data.aws_iam_policy_document.github_actions_trust.json
   max_session_duration = 3600
 
   tags = local.tags

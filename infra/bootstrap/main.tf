@@ -1,9 +1,9 @@
 data "aws_caller_identity" "current" {}
 
 locals {
-  account_id    = data.aws_caller_identity.current.account_id
-  state_bucket  = "anna-chat-tfstate-${local.account_id}"
-  lock_table    = "anna-chat-tfstate-lock"
+  account_id   = data.aws_caller_identity.current.account_id
+  state_bucket = "anna-chat-tfstate-${local.account_id}"
+  lock_table   = "anna-chat-tfstate-lock"
 }
 
 resource "aws_s3_bucket" "tf_state" {
