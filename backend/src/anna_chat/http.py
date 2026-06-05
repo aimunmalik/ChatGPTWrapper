@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -89,12 +90,24 @@ def authenticate(event: dict[str, Any], settings: Settings) -> AuthenticatedUser
     if not sub:
         raise HttpError(401, "missing authorizer claims")
 
+    # cognito:groups arrives in several shapes:
+    #   - a real list (some event/test paths): ["admins", "users"]
+    #   - API Gateway HTTP API flattens the JWT array into ONE string formatted
+    #     "[group1 group2]" — bracket-wrapped and SPACE-separated. A native user
+    #     in only "admins" gives "[admins]" (parses by luck), but a federated
+    #     Microsoft user is auto-added to the IdP group alongside "admins"
+    #     ("[us-east-1_xxx_Microsoft admins]"); splitting on commas alone
+    #     collapsed that to one bogus group and silently dropped admin → 403 on
+    #     every admin route. Split on whitespace AND commas — Cognito group
+    #     names contain neither.
     groups_raw = claims.get("cognito:groups", "")
-    if isinstance(groups_raw, str):
-        groups_raw = groups_raw.strip("[]")
-        groups = tuple(g.strip().strip('"') for g in groups_raw.split(",") if g.strip())
-    elif isinstance(groups_raw, list):
-        groups = tuple(groups_raw)
+    if isinstance(groups_raw, list):
+        groups = tuple(str(g).strip() for g in groups_raw if str(g).strip())
+    elif isinstance(groups_raw, str):
+        cleaned = groups_raw.strip().strip("[]")
+        groups = tuple(
+            g.strip().strip('"') for g in re.split(r"[,\s]+", cleaned) if g.strip()
+        )
     else:
         groups = ()
 

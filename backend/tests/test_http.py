@@ -107,6 +107,29 @@ def test_authenticate_handles_list_groups():
     assert user.groups == ("users",)
 
 
+def test_authenticate_parses_space_separated_bracket_groups():
+    # API Gateway HTTP API flattens the cognito:groups array into a single
+    # bracket-wrapped, SPACE-separated string. A federated Microsoft admin is in
+    # the auto-created IdP group AND "admins"; the parser must recover both.
+    # Regression: it used to comma-split and lose "admins" → 403 on every admin
+    # route for Microsoft-SSO admins.
+    event = {
+        "requestContext": {
+            "authorizer": {
+                "jwt": {
+                    "claims": {
+                        "sub": "u_fed",
+                        "cognito:groups": "[us-east-1_uUYWQeEHh_Microsoft admins]",
+                    }
+                }
+            }
+        }
+    }
+    user = authenticate(event, _settings())
+    assert set(user.groups) == {"us-east-1_uUYWQeEHh_Microsoft", "admins"}
+    assert "admins" in user.groups
+
+
 def test_authenticate_missing_claims_raises_401():
     with pytest.raises(HttpError) as exc:
         authenticate({}, _settings())
