@@ -20,6 +20,12 @@ variable "flow_logs_enabled" {
   default     = true
 }
 
+variable "az_count" {
+  description = "Number of availability zones to spread private subnets / interface endpoints across. Defaults to 2 (the previous hardcoded value, so existing callers are unaffected). Lower environments can pass 1 to halve interface-endpoint hourly cost."
+  type        = number
+  default     = 2
+}
+
 variable "logs_kms_key_arn" {
   description = "KMS CMK ARN used to encrypt flow log groups."
   type        = string

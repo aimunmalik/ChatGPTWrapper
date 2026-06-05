@@ -1,0 +1,34 @@
+# Copy this file to `terraform.tfvars` (gitignored) and fill in values.
+
+aws_region = "us-east-1"
+env        = "staging"
+
+# Must be globally unique within us-east-1, and DISTINCT from dev's suffix.
+# Short and random-ish is fine. Example: "anna-staging-42", "chatstg-k7q".
+cognito_domain_suffix = "REPLACE_ME"
+
+# Localhost-only until the SPA is deployed. After the first apply, add the
+# CloudFront default domain (see the `cloudfront_url` output) and re-apply,
+# since it's unknown until the distribution exists.
+cognito_callback_urls = [
+  "http://localhost:5173/callback",
+]
+cognito_logout_urls = [
+  "http://localhost:5173",
+  "http://localhost:5173/signed-out.html",
+]
+cors_allow_origins = [
+  "http://localhost:5173",
+]
+
+# VPC flow logs are expensive; off in staging by default.
+flow_logs_enabled  = false
+log_retention_days = 30
+
+# ──────────────────────────────────────────────────────────────────────
+# Microsoft Entra (M365) SSO — see docs/SETUP_M365_SSO.md
+# Staging runs WITHOUT federation (local Cognito users only). Leave blank.
+# ──────────────────────────────────────────────────────────────────────
+entra_tenant_id     = ""
+entra_client_id     = ""
+entra_client_secret = ""
